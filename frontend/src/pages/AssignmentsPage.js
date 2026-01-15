@@ -1,0 +1,377 @@
+import { useState, useEffect } from 'react';
+import api from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from 'sonner';
+import { Plus, Edit, Trash2, FileSpreadsheet, Search } from 'lucide-react';
+
+export default function AssignmentsPage() {
+  const [assignments, setAssignments] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [formData, setFormData] = useState({
+    employee_id: '',
+    asset_id: '',
+    assigned_date: '',
+    return_date: '',
+    remarks: '',
+  });
+
+  const fetchData = async () => {
+    try {
+      const [assignmentsRes, employeesRes, assetsRes] = await Promise.all([
+        api.get('/assignments'),
+        api.get('/employees'),
+        api.get('/assets'),
+      ]);
+      setAssignments(assignmentsRes.data);
+      setEmployees(employeesRes.data);
+      setAssets(assetsRes.data);
+    } catch (error) {
+      toast.error('Failed to fetch data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleOpenDialog = (assignment = null) => {
+    if (assignment) {
+      setEditingAssignment(assignment);
+      setFormData({
+        employee_id: assignment.employee_id,
+        asset_id: assignment.asset_id,
+        assigned_date: assignment.assigned_date,
+        return_date: assignment.return_date || '',
+        remarks: assignment.remarks || '',
+      });
+    } else {
+      setEditingAssignment(null);
+      setFormData({
+        employee_id: '',
+        asset_id: '',
+        assigned_date: '',
+        return_date: '',
+        remarks: '',
+      });
+    }
+    setDialogOpen(true);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...formData,
+        return_date: formData.return_date || null,
+        remarks: formData.remarks || null,
+      };
+
+      if (editingAssignment) {
+        await api.put(`/assignments/${editingAssignment.assignment_id}`, payload);
+        toast.success('Assignment updated successfully');
+      } else {
+        await api.post('/assignments', payload);
+        toast.success('Assignment created successfully');
+      }
+      setDialogOpen(false);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Operation failed');
+    }
+  };
+
+  const handleDelete = async (assignmentId) => {
+    if (!window.confirm('Are you sure you want to delete this assignment?')) return;
+
+    try {
+      await api.delete(`/assignments/${assignmentId}`);
+      toast.success('Assignment deleted successfully');
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to delete assignment');
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const response = await api.get('/assignments/export', {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'asset_assignments.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Export successful');
+    } catch (error) {
+      toast.error('Failed to export data');
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      toast.error('Please enter a search query');
+      return;
+    }
+
+    try {
+      const response = await api.get(`/search/employees?q=${searchQuery}`);
+      setSearchResults(response.data);
+    } catch (error) {
+      toast.error('Search failed');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-4xl font-bold tracking-tight">Asset Assignments</h1>
+          <p className="text-muted-foreground mt-2">Track asset allocations</p>
+        </div>
+        <div className="flex gap-2">
+          <Button data-testid="search-button" variant="outline" onClick={() => setSearchDialogOpen(true)}>
+            <Search className="h-4 w-4 mr-2" />
+            Search Employee
+          </Button>
+          <Button data-testid="export-button" variant="outline" onClick={handleExport}>
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            Export to Excel
+          </Button>
+          <Button data-testid="add-assignment-button" onClick={() => handleOpenDialog()}>
+            <Plus className="h-4 w-4 mr-2" />
+            Assign Asset
+          </Button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-border overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-muted/50 border-b border-border">
+              <tr>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">ID</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Employee</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Asset</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Assigned Date</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Return Date</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Remarks</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {assignments.map((assignment) => (
+                <tr key={assignment.assignment_id} className="hover:bg-muted/50 transition-colors" data-testid={`assignment-row-${assignment.assignment_id}`}>
+                  <td className="px-6 py-4 text-sm">{assignment.assignment_id}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <div className="font-medium">{assignment.employee_name}</div>
+                    <div className="text-muted-foreground text-xs">{assignment.employee_id}</div>
+                  </td>
+                  <td className="px-6 py-4 text-sm">
+                    <div className="font-medium">{assignment.asset_name}</div>
+                    <div className="text-muted-foreground text-xs">{assignment.asset_id}</div>
+                  </td>
+                  <td className="px-6 py-4 text-sm">{assignment.assigned_date}</td>
+                  <td className="px-6 py-4 text-sm">
+                    {assignment.return_date ? (
+                      assignment.return_date
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-sm">{assignment.remarks || '-'}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <div className="flex gap-2">
+                      <Button
+                        data-testid={`edit-assignment-${assignment.assignment_id}`}
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleOpenDialog(assignment)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        data-testid={`delete-assignment-${assignment.assignment_id}`}
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(assignment.assignment_id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingAssignment ? 'Edit Assignment' : 'Assign Asset'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-1 gap-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="employee_id">Employee</Label>
+                <Select
+                  value={formData.employee_id}
+                  onValueChange={(value) => setFormData({ ...formData, employee_id: value })}
+                  disabled={!!editingAssignment}
+                >
+                  <SelectTrigger data-testid="assignment-employee-select">
+                    <SelectValue placeholder="Select employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.employee_id} value={emp.employee_id}>
+                        {emp.full_name} ({emp.employee_id})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="asset_id">Asset</Label>
+                <Select
+                  value={formData.asset_id}
+                  onValueChange={(value) => setFormData({ ...formData, asset_id: value })}
+                  disabled={!!editingAssignment}
+                >
+                  <SelectTrigger data-testid="assignment-asset-select">
+                    <SelectValue placeholder="Select asset" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assets
+                      .filter((asset) => asset.status === 'Available' || asset.asset_id === formData.asset_id)
+                      .map((asset) => (
+                        <SelectItem key={asset.asset_id} value={asset.asset_id}>
+                          {asset.asset_name} ({asset.asset_id}) - {asset.status}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="assigned_date">Assigned Date</Label>
+                <Input
+                  id="assigned_date"
+                  data-testid="assignment-date-input"
+                  type="date"
+                  value={formData.assigned_date}
+                  onChange={(e) => setFormData({ ...formData, assigned_date: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="return_date">Return Date (Optional)</Label>
+                <Input
+                  id="return_date"
+                  data-testid="assignment-return-date-input"
+                  type="date"
+                  value={formData.return_date}
+                  onChange={(e) => setFormData({ ...formData, return_date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="remarks">Remarks (Optional)</Label>
+                <Input
+                  id="remarks"
+                  data-testid="assignment-remarks-input"
+                  value={formData.remarks}
+                  onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button data-testid="assignment-form-submit" type="submit">
+                {editingAssignment ? 'Update' : 'Create'} Assignment
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Search Employee Assets</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                data-testid="search-input"
+                placeholder="Search by name, ID, or department..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              />
+              <Button data-testid="search-submit-button" onClick={handleSearch}>
+                <Search className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {searchResults.length > 0 && (
+              <div className="space-y-4">
+                {searchResults.map((employee) => (
+                  <div key={employee.employee_id} className="border border-border rounded-lg p-4" data-testid={`search-result-${employee.employee_id}`}>
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h3 className="font-semibold text-lg">{employee.full_name}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {employee.employee_id} • {employee.department} • {employee.designation}
+                        </p>
+                      </div>
+                    </div>
+                    {employee.assigned_assets && employee.assigned_assets.length > 0 ? (
+                      <div className="mt-3">
+                        <p className="text-sm font-medium mb-2">Assigned Assets:</p>
+                        <div className="space-y-2">
+                          {employee.assigned_assets.map((asset) => (
+                            <div key={asset.assignment_id} className="bg-muted/30 rounded p-2 text-sm">
+                              <p className="font-medium">{asset.asset_name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                ID: {asset.asset_id} • Assigned: {asset.assigned_date}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground mt-2">No assets currently assigned</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
