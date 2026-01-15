@@ -1,0 +1,168 @@
+{
+  "identity": {
+    "name": "E1: The Anti-AI Designer",
+    "principles": [
+      "Fusion over Imitation",
+      "Emotion First",
+      "Content is King",
+      "Zoom In",
+      "Negative Space",
+      "Contrast"
+    ],
+    "anti_patterns": [
+      "Purple/Teal for CTA",
+      "Inter everywhere (Headings must be Manrope)",
+      "Center-Everything Disease",
+      "Gradient Overload"
+    ]
+  },
+  "typography": {
+    "font_family": {
+      "headings": "Manrope, sans-serif",
+      "body": "Inter, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "weights": {
+      "headings": "font-semibold or font-bold",
+      "body": "font-normal"
+    },
+    "sizes": {
+      "h1": "text-4xl md:text-5xl tracking-tight",
+      "h2": "text-3xl tracking-tight",
+      "h3": "text-2xl tracking-tight",
+      "body": "text-base leading-relaxed",
+      "small": "text-sm text-muted-foreground"
+    },
+    "rules": [
+      "Headings must use Manrope.",
+      "Body text must use Inter.",
+      "Use tight tracking for headings.",
+      "Never center text by default."
+    ]
+  },
+  "colors": {
+    "theme": "light",
+    "palette": {
+      "background": "#FFFFFF",
+      "foreground": "#0F172A",
+      "primary": "#0F172A",
+      "primary_foreground": "#F8FAFC",
+      "secondary": "#F1F5F9",
+      "secondary_foreground": "#0F172A",
+      "accent": "#7C3AED",
+      "accent_foreground": "#FFFFFF",
+      "muted": "#F8FAFC",
+      "muted_foreground": "#64748B",
+      "border": "#E2E8F0",
+      "input": "#F1F5F9",
+      "ring": "#94A3B8",
+      "success": "#10B981",
+      "warning": "#F59E0B",
+      "error": "#EF4444"
+    },
+    "usage": {
+      "primary_action": "bg-primary text-primary-foreground hover:bg-primary/90",
+      "secondary_action": "bg-white border border-input hover:bg-accent hover:text-accent-foreground",
+      "accent_element": "text-accent",
+      "sidebar": "bg-muted/50 border-r border-border"
+    }
+  },
+  "layout": {
+    "spacing_scale": [
+      "p-1", "p-2", "p-4", "p-6", "p-8", "p-12", "p-16", "p-24", "p-32"
+    ],
+    "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "grid_system": {
+      "dashboard": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6",
+      "form": "grid grid-cols-1 gap-6 md:grid-cols-2"
+    },
+    "rules": [
+      "Use generous spacing (p-6 or p-8) for cards.",
+      "Dashboard widgets must fill their height (h-full).",
+      "Sidebar should be fixed on desktop, collapsible on mobile."
+    ]
+  },
+  "components": {
+    "card": {
+      "style": "bg-white border border-border rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200",
+      "header": "p-6 pb-3 border-b border-border/50",
+      "content": "p-6"
+    },
+    "button": {
+      "base": "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+      "variants": {
+        "default": "bg-primary text-primary-foreground shadow hover:bg-primary/90",
+        "outline": "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
+        "ghost": "hover:bg-accent hover:text-accent-foreground"
+      }
+    },
+    "input": {
+      "style": "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+    },
+    "table": {
+      "wrapper": "w-full overflow-auto rounded-md border border-border",
+      "header": "bg-muted/50 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider",
+      "row": "border-b border-border hover:bg-muted/50 transition-colors",
+      "cell": "p-4 align-middle [&:has([role=checkbox])]:pr-0"
+    }
+  },
+  "assets": {
+    "images": {
+      "avatars": [
+        {
+          "url": "https://images.unsplash.com/photo-1589220286904-3dcef62c68ee?crop=entropy&cs=srgb&fm=jpg&q=85",
+          "alt": "Female Employee Portrait"
+        },
+        {
+          "url": "https://images.pexels.com/photos/1181519/pexels-photo-1181519.jpeg",
+          "alt": "Male Employee Portrait 1"
+        },
+        {
+          "url": "https://images.pexels.com/photos/32160350/pexels-photo-32160350.jpeg",
+          "alt": "Male Employee Portrait 2"
+        }
+      ],
+      "devices": [
+        {
+          "url": "https://images.unsplash.com/photo-1699561943566-532859d21b38?crop=entropy&cs=srgb&fm=jpg&q=85",
+          "alt": "Office Devices Minimalist"
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1740591318085-092777c9c9ea?crop=entropy&cs=srgb&fm=jpg&q=85",
+          "alt": "Laptop and Phone Mockup"
+        }
+      ]
+    },
+    "icons": "Use lucide-react for all icons. Examples: LayoutDashboard, Users, Package, ArrowRightLeft, LogOut, Search, Plus, Trash2, Edit, FileSpreadsheet."
+  },
+  "visual_enhancers": {
+    "glassmorphism": "backdrop-blur-md bg-white/70 border-b border-white/20",
+    "gradients": "None. Use solid colors and subtle borders.",
+    "shadows": "shadow-sm for cards, shadow-lg for dropdowns/modals.",
+    "borders": "1px solid border-border (approx #E2E8F0)."
+  },
+  "instructions_to_main_agent": [
+    "1. INSTALL DEPENDENCIES: npm install lucide-react recharts clsx tailwind-merge",
+    "2. SETUP FONTS: Add Manrope and Inter from Google Fonts to index.html or import in CSS.",
+    "3. CONFIGURE TAILWIND: Update tailwind.config.js with the colors and fonts defined above.",
+    "4. CREATE LAYOUT: Build a responsive SidebarLayout component with a collapsible sidebar.",
+    "5. BUILD DASHBOARD: Use the 'Bento Grid' strategy. Create widgets for Total Assets, Assigned, Available, Employees.",
+    "6. IMPLEMENT TABLES: Create a reusable DataTable component with search, sort, and pagination.",
+    "7. FORMS: Use Shadcn-like form components (Label, Input, Select, Button) but styled according to the 'components' section.",
+    "8. LOGIN: Create a clean, centered login card with a professional look.",
+    "9. EXPORT: Add the 'Export to Excel' button prominently on the Asset Assignment page.",
+    "10. TESTING: Add data-testid to all interactive elements (buttons, inputs, links)."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Do not use generic centered layouts.",
+    "Create depth through layered design elements.",
+    "Use glass-morphism effects for sticky headers.",
+    "Every interaction needs micro-animations (hover, focus).",
+    "Use 2-3x more spacing than feels comfortable.",
+    "Never use AI assistant Emoji characters.",
+    "Prioritize using pre-existing components from src/components/ui.",
+    "Components MUST use named exports.",
+    "Pages MUST use default exports.",
+    "Use sonner for toasts."
+  ]
+}
