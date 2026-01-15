@@ -247,7 +247,7 @@ export default function AssignmentsPage() {
                   <SelectTrigger data-testid="assignment-employee-select">
                     <SelectValue placeholder="Select employee" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" sideOffset={5}>
                     {employees.map((emp) => (
                       <SelectItem key={emp.employee_id} value={emp.employee_id}>
                         {emp.full_name} ({emp.employee_id})
@@ -266,7 +266,7 @@ export default function AssignmentsPage() {
                   <SelectTrigger data-testid="assignment-asset-select">
                     <SelectValue placeholder="Select asset" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" sideOffset={5}>
                     {assets
                       .filter((asset) => asset.status === 'Available' || asset.asset_id === formData.asset_id)
                       .map((asset) => (
