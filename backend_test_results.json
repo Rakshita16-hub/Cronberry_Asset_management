@@ -1,0 +1,169 @@
+{
+  "summary": {
+    "total_tests": 32,
+    "passed_tests": 32,
+    "success_rate": "100.0%"
+  },
+  "detailed_results": [
+    {
+      "test": "Valid Login",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Token Received",
+      "status": "PASS",
+      "details": "JWT token obtained successfully"
+    },
+    {
+      "test": "Invalid Login",
+      "status": "PASS",
+      "details": "Status: 401"
+    },
+    {
+      "test": "Get Current User",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Employees",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Create Employee",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Update Employee",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Delete Employee",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Assets",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Create Asset",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Update Asset",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Create Test Employee for Assignment",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Create Test Asset for Assignment",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Assets Before Assignment",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Asset Initial Status",
+      "status": "PASS",
+      "details": "Asset status is Available"
+    },
+    {
+      "test": "Create Assignment",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Assets After Assignment",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Auto Status Update - Assignment",
+      "status": "PASS",
+      "details": "Asset status changed to Assigned"
+    },
+    {
+      "test": "Update Assignment with Return Date",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Assets After Return",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Auto Status Update - Return",
+      "status": "PASS",
+      "details": "Asset status changed back to Available"
+    },
+    {
+      "test": "Delete Assignment",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Cleanup Test Employee",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Cleanup Test Asset",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get Dashboard Stats",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Dashboard Stats Fields",
+      "status": "PASS",
+      "details": "All required fields present: {'total_assets': 1, 'assigned_assets': 0, 'available_assets': 1, 'total_employees': 0}"
+    },
+    {
+      "test": "Create Employee for Search Test",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Search by Name",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Search Results Found",
+      "status": "PASS",
+      "details": "Found 1 results"
+    },
+    {
+      "test": "Search by Department",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Cleanup Search Test Employee",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "test": "Excel Export",
+      "status": "PASS",
+      "details": "Export successful, content-type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    }
+  ]
+}
