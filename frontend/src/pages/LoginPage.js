@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Package } from 'lucide-react';
+import { CronberryLogo } from '@/components/CronberryLogo';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -38,15 +38,17 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-muted to-background p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-xl shadow-lg border border-border p-8">
+        <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8">
           <div className="flex flex-col items-center mb-8">
-            <div className="h-16 w-16 bg-primary rounded-xl flex items-center justify-center mb-4">
-              <Package className="h-8 w-8 text-primary-foreground" />
+            <div className="mb-4">
+              <CronberryLogo className="h-20 w-20" />
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-center">Asset Manager</h1>
-            <p className="text-muted-foreground text-center mt-2">Sign in to continue</p>
+            <h1 className="text-3xl font-bold tracking-tight text-center text-[#0B1F3A]">
+              Cronberry Assets Tracker
+            </h1>
+            <p className="text-slate-600 text-center mt-2">Sign in to continue</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
@@ -79,14 +81,14 @@ export default function LoginPage() {
             <Button
               data-testid="login-submit-button"
               type="submit"
-              className="w-full"
+              className="w-full bg-[#0B1F3A] hover:bg-[#0B1F3A]/90"
               disabled={loading}
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-muted-foreground">
+          <div className="mt-6 text-center text-sm text-slate-600">
             <p>Demo: admin / admin123</p>
           </div>
         </div>
