@@ -170,48 +170,48 @@ export default function EmployeesPage() {
     <div className="max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight text-[#0B1F3A]\">Employees</h1>
-          <p className="text-slate-600 mt-2\">Manage employee records</p>
+          <h1 className="text-4xl font-bold tracking-tight text-[#0B1F3A]">Employees</h1>
+          <p className="text-slate-600 mt-2">Manage employee records</p>
         </div>
-        <div className=\"flex gap-2\">
+        <div className="flex gap-2">
           <input
             ref={fileInputRef}
-            type=\"file\"
-            accept=\".xlsx,.xls\"
+            type="file"
+            accept=".xlsx,.xls"
             onChange={handleImport}
-            className=\"hidden\"
-            data-testid=\"import-file-input\"
+            className="hidden"
+            data-testid="import-file-input"
           />
           <Button
-            data-testid=\"download-template-button\"
-            variant=\"outline\"
+            data-testid="download-template-button"
+            variant="outline"
             onClick={handleDownloadTemplate}
-            className=\"border-slate-300\"
+            className="border-slate-300"
           >
-            <FileSpreadsheet className=\"h-4 w-4 mr-2\" />
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
             Template
           </Button>
           <Button
-            data-testid=\"import-employees-button\"
-            variant=\"outline\"
+            data-testid="import-employees-button"
+            variant="outline"
             onClick={() => fileInputRef.current?.click()}
             disabled={importing}
-            className=\"border-slate-300\"
+            className="border-slate-300"
           >
-            <Upload className=\"h-4 w-4 mr-2\" />
+            <Upload className="h-4 w-4 mr-2" />
             {importing ? 'Importing...' : 'Import'}
           </Button>
           <Button
-            data-testid=\"export-employees-button\"
-            variant=\"outline\"
+            data-testid="export-employees-button"
+            variant="outline"
             onClick={handleExport}
-            className=\"border-slate-300\"
+            className="border-slate-300"
           >
-            <Download className=\"h-4 w-4 mr-2\" />
+            <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button data-testid=\"add-employee-button\" onClick={() => handleOpenDialog()} className=\"bg-[#0B1F3A] hover:bg-[#0B1F3A]/90\">
-            <Plus className=\"h-4 w-4 mr-2\" />
+          <Button data-testid="add-employee-button" onClick={() => handleOpenDialog()} className="bg-[#0B1F3A] hover:bg-[#0B1F3A]/90">
+            <Plus className="h-4 w-4 mr-2" />
             Add Employee
           </Button>
         </div>
