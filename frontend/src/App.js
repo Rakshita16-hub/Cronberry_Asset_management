@@ -6,19 +6,26 @@ import DashboardPage from "@/pages/DashboardPage";
 import EmployeesPage from "@/pages/EmployeesPage";
 import AssetsPage from "@/pages/AssetsPage";
 import AssignmentsPage from "@/pages/AssignmentsPage";
+import EmployeeDashboard from "@/pages/EmployeeDashboard";
 import Layout from "@/components/Layout";
+import EmployeeLayout from "@/components/EmployeeLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { getUserRole } from "@/lib/auth";
 
 function App() {
+  const role = getUserRole();
+
   return (
     <div className="App">
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          
+          {/* HR/Admin Routes */}
           <Route
             path="/"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={["HR", "Admin"]}>
                 <Layout />
               </ProtectedRoute>
             }
@@ -28,6 +35,18 @@ function App() {
             <Route path="employees" element={<EmployeesPage />} />
             <Route path="assets" element={<AssetsPage />} />
             <Route path="assignments" element={<AssignmentsPage />} />
+          </Route>
+
+          {/* Employee Routes */}
+          <Route
+            path="/employee"
+            element={
+              <ProtectedRoute allowedRoles={["Employee"]}>
+                <EmployeeLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<EmployeeDashboard />} />
           </Route>
         </Routes>
       </BrowserRouter>

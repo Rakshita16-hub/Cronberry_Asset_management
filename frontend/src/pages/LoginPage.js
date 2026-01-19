@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { setAuthToken } from '@/lib/auth';
+import { setAuthToken, setUserRole, setEmployeeId } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,8 +28,18 @@ export default function LoginPage() {
       });
 
       setAuthToken(response.data.access_token);
+      setUserRole(response.data.role);
+      if (response.data.employee_id) {
+        setEmployeeId(response.data.employee_id);
+      }
+      
       toast.success('Login successful!');
-      navigate('/dashboard');
+      
+      if (response.data.role === 'Employee') {
+        navigate('/employee');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Login failed');
     } finally {
@@ -43,7 +53,7 @@ export default function LoginPage() {
         <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8">
           <div className="flex flex-col items-center mb-8">
             <div className="mb-4">
-              <CronberryLogo className="h-20 w-20" />
+              <CronberryLogo className="h-24 w-auto" />
             </div>
             <h1 className="text-3xl font-bold tracking-tight text-center text-[#0B1F3A]">
               Cronberry Assets Tracker

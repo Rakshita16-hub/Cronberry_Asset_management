@@ -50,9 +50,11 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         token = credentials.credentials
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
+        role: str = payload.get("role")
+        employee_id: str = payload.get("employee_id")
         if username is None:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-        return username
+        return {"username": username, "role": role, "employee_id": employee_id}
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
@@ -63,6 +65,8 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    role: str
+    employee_id: Optional[str] = None
 
 class Employee(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -124,26 +128,57 @@ class DashboardStats(BaseModel):
     available_assets: int
     total_employees: int
 
+class PendingReturn(BaseModel):
+    employee_id: str
+    employee_name: str
+    email: str
+    assets: List[dict]
+
 @api_router.post("/auth/login", response_model=LoginResponse)
 async def login(login_req: LoginRequest):
     user = await db.users.find_one({"username": login_req.username}, {"_id": 0})
     if not user or not verify_password(login_req.password, user["password"]):
         raise HTTPException(status_code=401, detail="Incorrect username or password")
     
-    access_token = create_access_token(data={"sub": user["username"]})
-    return {"access_token": access_token, "token_type": "bearer"}
+    token_data = {
+        "sub": user["username"],
+        "role": user.get("role", "HR"),
+        "employee_id": user.get("employee_id")
+    }
+    access_token = create_access_token(data=token_data)
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "role": user.get("role", "HR"),
+        "employee_id": user.get("employee_id")
+    }
 
 @api_router.get("/auth/me")
-async def get_me(username: str = Depends(get_current_user)):
-    return {"username": username}
+async def get_me(current_user: dict = Depends(get_current_user)):
+    return current_user
 
 @api_router.get("/employees", response_model=List[Employee])
-async def get_employees(username: str = Depends(get_current_user)):
+async def get_employees(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
     employees = await db.employees.find({}, {"_id": 0}).to_list(1000)
     return employees
 
+@api_router.get("/employees/me", response_model=Employee)
+async def get_my_profile(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] == "Employee" and current_user["employee_id"]:
+        employee = await db.employees.find_one({"employee_id": current_user["employee_id"]}, {"_id": 0})
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee profile not found")
+        return employee
+    raise HTTPException(status_code=403, detail="Access denied")
+
 @api_router.post("/employees", response_model=Employee)
-async def create_employee(employee: EmployeeCreate, username: str = Depends(get_current_user)):
+async def create_employee(employee: EmployeeCreate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     count = await db.employees.count_documents({})
     employee_id = f"EMP{str(count + 1).zfill(4)}"
     
@@ -154,7 +189,10 @@ async def create_employee(employee: EmployeeCreate, username: str = Depends(get_
     return Employee(**employee_dict)
 
 @api_router.put("/employees/{employee_id}", response_model=Employee)
-async def update_employee(employee_id: str, employee: EmployeeCreate, username: str = Depends(get_current_user)):
+async def update_employee(employee_id: str, employee: EmployeeCreate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     employee_dict = employee.model_dump()
     result = await db.employees.update_one({"employee_id": employee_id}, {"$set": employee_dict})
     
@@ -165,19 +203,27 @@ async def update_employee(employee_id: str, employee: EmployeeCreate, username: 
     return Employee(**employee_dict)
 
 @api_router.delete("/employees/{employee_id}")
-async def delete_employee(employee_id: str, username: str = Depends(get_current_user)):
+async def delete_employee(employee_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     result = await db.employees.delete_one({"employee_id": employee_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Employee not found")
     return {"message": "Employee deleted successfully"}
 
 @api_router.get("/assets", response_model=List[Asset])
-async def get_assets(username: str = Depends(get_current_user)):
+async def get_assets(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
     assets = await db.assets.find({}, {"_id": 0}).to_list(1000)
     return assets
 
 @api_router.post("/assets", response_model=Asset)
-async def create_asset(asset: AssetCreate, username: str = Depends(get_current_user)):
+async def create_asset(asset: AssetCreate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     count = await db.assets.count_documents({})
     asset_id = f"AST{str(count + 1).zfill(4)}"
     
@@ -188,7 +234,10 @@ async def create_asset(asset: AssetCreate, username: str = Depends(get_current_u
     return Asset(**asset_dict)
 
 @api_router.put("/assets/{asset_id}", response_model=Asset)
-async def update_asset(asset_id: str, asset: AssetCreate, username: str = Depends(get_current_user)):
+async def update_asset(asset_id: str, asset: AssetCreate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     asset_dict = asset.model_dump()
     result = await db.assets.update_one({"asset_id": asset_id}, {"$set": asset_dict})
     
@@ -199,19 +248,37 @@ async def update_asset(asset_id: str, asset: AssetCreate, username: str = Depend
     return Asset(**asset_dict)
 
 @api_router.delete("/assets/{asset_id}")
-async def delete_asset(asset_id: str, username: str = Depends(get_current_user)):
+async def delete_asset(asset_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     result = await db.assets.delete_one({"asset_id": asset_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Asset not found")
     return {"message": "Asset deleted successfully"}
 
 @api_router.get("/assignments", response_model=List[Assignment])
-async def get_assignments(username: str = Depends(get_current_user)):
+async def get_assignments(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
     assignments = await db.assignments.find({}, {"_id": 0}).to_list(1000)
     return assignments
 
+@api_router.get("/assignments/my", response_model=List[Assignment])
+async def get_my_assignments(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] == "Employee" and current_user["employee_id"]:
+        assignments = await db.assignments.find(
+            {"employee_id": current_user["employee_id"]},
+            {"_id": 0}
+        ).to_list(1000)
+        return assignments
+    raise HTTPException(status_code=403, detail="Access denied")
+
 @api_router.post("/assignments", response_model=Assignment)
-async def create_assignment(assignment: AssignmentCreate, username: str = Depends(get_current_user)):
+async def create_assignment(assignment: AssignmentCreate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     employee = await db.employees.find_one({"employee_id": assignment.employee_id}, {"_id": 0})
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
@@ -237,7 +304,10 @@ async def create_assignment(assignment: AssignmentCreate, username: str = Depend
     return Assignment(**assignment_dict)
 
 @api_router.put("/assignments/{assignment_id}", response_model=Assignment)
-async def update_assignment(assignment_id: str, assignment: AssignmentCreate, username: str = Depends(get_current_user)):
+async def update_assignment(assignment_id: str, assignment: AssignmentCreate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     existing = await db.assignments.find_one({"assignment_id": assignment_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Assignment not found")
@@ -265,7 +335,10 @@ async def update_assignment(assignment_id: str, assignment: AssignmentCreate, us
     return Assignment(**assignment_dict)
 
 @api_router.delete("/assignments/{assignment_id}")
-async def delete_assignment(assignment_id: str, username: str = Depends(get_current_user)):
+async def delete_assignment(assignment_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     assignment = await db.assignments.find_one({"assignment_id": assignment_id}, {"_id": 0})
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found")
@@ -276,7 +349,10 @@ async def delete_assignment(assignment_id: str, username: str = Depends(get_curr
     return {"message": "Assignment deleted successfully"}
 
 @api_router.get("/dashboard/stats", response_model=DashboardStats)
-async def get_dashboard_stats(username: str = Depends(get_current_user)):
+async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     total_assets = await db.assets.count_documents({})
     assigned_assets = await db.assets.count_documents({"status": "Assigned"})
     available_assets = await db.assets.count_documents({"status": "Available"})
@@ -289,8 +365,38 @@ async def get_dashboard_stats(username: str = Depends(get_current_user)):
         "total_employees": total_employees
     }
 
+@api_router.get("/pending-returns", response_model=List[PendingReturn])
+async def get_pending_returns(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    exit_employees = await db.employees.find({"status": "Exit"}, {"_id": 0}).to_list(1000)
+    pending_returns = []
+    
+    for employee in exit_employees:
+        unreturned_assets = await db.assignments.find(
+            {
+                "employee_id": employee["employee_id"],
+                "return_date": None
+            },
+            {"_id": 0}
+        ).to_list(1000)
+        
+        if unreturned_assets:
+            pending_returns.append({
+                "employee_id": employee["employee_id"],
+                "employee_name": employee["full_name"],
+                "email": employee["email"],
+                "assets": unreturned_assets
+            })
+    
+    return pending_returns
+
 @api_router.get("/search/employees")
-async def search_employees(q: str, username: str = Depends(get_current_user)):
+async def search_employees(q: str, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     query = {
         "$or": [
             {"full_name": {"$regex": q, "$options": "i"}},
@@ -310,7 +416,10 @@ async def search_employees(q: str, username: str = Depends(get_current_user)):
     return employees
 
 @api_router.get("/assignments/export")
-async def export_assignments(username: str = Depends(get_current_user)):
+async def export_assignments(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     assignments = await db.assignments.find({}, {"_id": 0}).to_list(1000)
     
     wb = Workbook()
