@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -12,8 +12,9 @@ from datetime import datetime, timezone, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi.responses import StreamingResponse
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from io import BytesIO
+import pandas as pd
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -158,6 +159,56 @@ async def login(login_req: LoginRequest):
 async def get_me(current_user: dict = Depends(get_current_user)):
     return current_user
 
+@api_router.get("/global-search")
+async def global_search(q: str, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    results = {"employees": [], "assets": []}
+    
+    # Search employees
+    employee_query = {
+        "$or": [
+            {"full_name": {"$regex": q, "$options": "i"}},
+            {"employee_id": {"$regex": q, "$options": "i"}}
+        ]
+    }
+    employees = await db.employees.find(employee_query, {"_id": 0}).to_list(10)
+    
+    for employee in employees:
+        assignments = await db.assignments.find(
+            {"employee_id": employee["employee_id"], "return_date": None},
+            {"_id": 0}
+        ).to_list(100)
+        employee["assigned_assets"] = assignments
+    
+    results["employees"] = employees
+    
+    # Search assets
+    asset_query = {
+        "$or": [
+            {"asset_name": {"$regex": q, "$options": "i"}},
+            {"category": {"$regex": q, "$options": "i"}},
+            {"serial_number": {"$regex": q, "$options": "i"}},
+            {"asset_id": {"$regex": q, "$options": "i"}}
+        ]
+    }
+    assets = await db.assets.find(asset_query, {"_id": 0}).to_list(10)
+    
+    for asset in assets:
+        if asset["status"] == "Assigned":
+            assignment = await db.assignments.find_one(
+                {"asset_id": asset["asset_id"], "return_date": None},
+                {"_id": 0}
+            )
+            asset["assigned_to"] = assignment
+        else:
+            asset["assigned_to"] = None
+    
+    results["assets"] = assets
+    
+    return results
+
 @api_router.get("/employees", response_model=List[Employee])
 async def get_employees(current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in ["HR", "Admin"]:
@@ -187,6 +238,110 @@ async def create_employee(employee: EmployeeCreate, current_user: dict = Depends
     
     await db.employees.insert_one(employee_dict)
     return Employee(**employee_dict)
+
+@api_router.post("/employees/import")
+async def import_employees(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    try:
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+        
+        required_columns = ['Full Name', 'Department', 'Designation', 'Email', 'Date of Joining', 'Status']
+        if not all(col in df.columns for col in required_columns):
+            raise HTTPException(status_code=400, detail=f"Excel file must contain columns: {', '.join(required_columns)}")
+        
+        imported_count = 0
+        errors = []
+        
+        for index, row in df.iterrows():
+            try:
+                count = await db.employees.count_documents({})
+                employee_id = f"EMP{str(count + 1).zfill(4)}"
+                
+                employee_data = {
+                    "employee_id": employee_id,
+                    "full_name": str(row['Full Name']),
+                    "department": str(row['Department']),
+                    "designation": str(row['Designation']),
+                    "email": str(row['Email']),
+                    "date_of_joining": str(row['Date of Joining']),
+                    "status": str(row['Status'])
+                }
+                
+                await db.employees.insert_one(employee_data)
+                imported_count += 1
+            except Exception as e:
+                errors.append(f"Row {index + 2}: {str(e)}")
+        
+        return {
+            "message": f"Successfully imported {imported_count} employees",
+            "imported": imported_count,
+            "errors": errors
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+
+@api_router.get("/employees/export")
+async def export_employees(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    employees = await db.employees.find({}, {"_id": 0}).to_list(1000)
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Employees"
+    
+    headers = ["Employee ID", "Full Name", "Department", "Designation", "Email", "Date of Joining", "Status"]
+    ws.append(headers)
+    
+    for employee in employees:
+        ws.append([
+            employee.get("employee_id", ""),
+            employee.get("full_name", ""),
+            employee.get("department", ""),
+            employee.get("designation", ""),
+            employee.get("email", ""),
+            employee.get("date_of_joining", ""),
+            employee.get("status", "")
+        ])
+    
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=employees.xlsx"}
+    )
+
+@api_router.get("/employees/template")
+async def download_employees_template(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Employees Template"
+    
+    headers = ["Full Name", "Department", "Designation", "Email", "Date of Joining", "Status"]
+    ws.append(headers)
+    
+    # Add sample data
+    ws.append(["John Smith", "IT", "Software Engineer", "john.smith@example.com", "2024-01-15", "Active"])
+    
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=employees_template.xlsx"}
+    )
 
 @api_router.put("/employees/{employee_id}", response_model=Employee)
 async def update_employee(employee_id: str, employee: EmployeeCreate, current_user: dict = Depends(get_current_user)):
@@ -232,6 +387,110 @@ async def create_asset(asset: AssetCreate, current_user: dict = Depends(get_curr
     
     await db.assets.insert_one(asset_dict)
     return Asset(**asset_dict)
+
+@api_router.post("/assets/import")
+async def import_assets(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    try:
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+        
+        required_columns = ['Asset Name', 'Category', 'Brand', 'Serial Number', 'Condition', 'Status']
+        if not all(col in df.columns for col in required_columns):
+            raise HTTPException(status_code=400, detail=f"Excel file must contain columns: {', '.join(required_columns)}")
+        
+        imported_count = 0
+        errors = []
+        
+        for index, row in df.iterrows():
+            try:
+                count = await db.assets.count_documents({})
+                asset_id = f"AST{str(count + 1).zfill(4)}"
+                
+                asset_data = {
+                    "asset_id": asset_id,
+                    "asset_name": str(row['Asset Name']),
+                    "category": str(row['Category']),
+                    "brand": str(row['Brand']),
+                    "serial_number": str(row['Serial Number']),
+                    "condition": str(row['Condition']),
+                    "status": str(row['Status'])
+                }
+                
+                await db.assets.insert_one(asset_data)
+                imported_count += 1
+            except Exception as e:
+                errors.append(f"Row {index + 2}: {str(e)}")
+        
+        return {
+            "message": f"Successfully imported {imported_count} assets",
+            "imported": imported_count,
+            "errors": errors
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+
+@api_router.get("/assets/export")
+async def export_assets(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    assets = await db.assets.find({}, {"_id": 0}).to_list(1000)
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Assets"
+    
+    headers = ["Asset ID", "Asset Name", "Category", "Brand", "Serial Number", "Condition", "Status"]
+    ws.append(headers)
+    
+    for asset in assets:
+        ws.append([
+            asset.get("asset_id", ""),
+            asset.get("asset_name", ""),
+            asset.get("category", ""),
+            asset.get("brand", ""),
+            asset.get("serial_number", ""),
+            asset.get("condition", ""),
+            asset.get("status", "")
+        ])
+    
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=assets.xlsx"}
+    )
+
+@api_router.get("/assets/template")
+async def download_assets_template(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Assets Template"
+    
+    headers = ["Asset Name", "Category", "Brand", "Serial Number", "Condition", "Status"]
+    ws.append(headers)
+    
+    # Add sample data
+    ws.append(["Dell Laptop", "Electronics", "Dell", "DL123456", "New", "Available"])
+    
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=assets_template.xlsx"}
+    )
 
 @api_router.put("/assets/{asset_id}", response_model=Asset)
 async def update_asset(asset_id: str, asset: AssetCreate, current_user: dict = Depends(get_current_user)):
