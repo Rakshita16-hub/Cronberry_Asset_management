@@ -102,6 +102,12 @@ export const Layout = () => {
           </button>
         </header>
 
+        <div className="hidden lg:block bg-white border-b border-slate-200 p-4">
+          <div className="max-w-7xl mx-auto">
+            <GlobalSearch />
+          </div>
+        </div>
+
         <main className="flex-1 overflow-auto p-6">
           <Outlet />
         </main>
