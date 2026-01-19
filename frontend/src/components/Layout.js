@@ -4,6 +4,7 @@ import { LayoutDashboard, Users, Package, ArrowRightLeft, LogOut, Menu, X } from
 import { removeAuthToken } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { CronberryLogo } from '@/components/CronberryLogo';
+import { GlobalSearch } from '@/components/GlobalSearch';
 
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
