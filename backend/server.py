@@ -604,9 +604,27 @@ async def update_assignment(assignment_id: str, assignment: AssignmentCreate, cu
     assignment_dict["employee_name"] = employee["full_name"]
     assignment_dict["asset_name"] = asset["asset_name"]
     
+    # Handle asset return with condition
     if assignment.return_date and not existing.get("return_date"):
-        await db.assets.update_one({"asset_id": assignment.asset_id}, {"$set": {"status": "Available"}})
+        # Asset is being returned
+        if assignment.asset_return_condition:
+            if assignment.asset_return_condition == "Good":
+                # Good condition: Available and Good
+                await db.assets.update_one(
+                    {"asset_id": assignment.asset_id}, 
+                    {"$set": {"status": "Available", "condition": "Good"}}
+                )
+            elif assignment.asset_return_condition in ["Damaged", "Needs Repair"]:
+                # Damaged or Needs Repair: Under Repair and Damaged
+                await db.assets.update_one(
+                    {"asset_id": assignment.asset_id}, 
+                    {"$set": {"status": "Under Repair", "condition": "Damaged"}}
+                )
+        else:
+            # No condition specified, just mark as Available
+            await db.assets.update_one({"asset_id": assignment.asset_id}, {"$set": {"status": "Available"}})
     elif not assignment.return_date and existing.get("return_date"):
+        # Return date removed, mark as Assigned again
         await db.assets.update_one({"asset_id": assignment.asset_id}, {"$set": {"status": "Assigned"}})
     
     await db.assignments.update_one({"assignment_id": assignment_id}, {"$set": assignment_dict})
