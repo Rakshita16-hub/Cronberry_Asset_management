@@ -387,7 +387,6 @@ export default function AssetsPage() {
                     onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
                   />
                 </div>
-                </div>
               )}
               
               <div className="space-y-2">
