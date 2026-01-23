@@ -450,7 +450,7 @@ async def export_assets(current_user: dict = Depends(get_current_user)):
     ws = wb.active
     ws.title = "Assets"
     
-    headers = ["Asset ID", "Asset Name", "Category", "Brand", "Serial Number", "Condition", "Status"]
+    headers = ["Asset ID", "Asset Name", "Category", "Brand", "Serial Number / IMEI 1", "IMEI 2", "Condition", "Status"]
     ws.append(headers)
     
     for asset in assets:
@@ -460,6 +460,7 @@ async def export_assets(current_user: dict = Depends(get_current_user)):
             asset.get("category", ""),
             asset.get("brand", ""),
             asset.get("serial_number", ""),
+            asset.get("imei_2", ""),
             asset.get("condition", ""),
             asset.get("status", "")
         ])
