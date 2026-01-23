@@ -416,7 +416,6 @@ export default function AssetsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Available">Available</SelectItem>
-                    <SelectItem value="Assigned">Assigned</SelectItem>
                     <SelectItem value="Under Repair">Under Repair</SelectItem>
                   </SelectContent>
                 </Select>
