@@ -421,6 +421,29 @@ export default function AssignmentsPage() {
                   onChange={(e) => setFormData({ ...formData, return_date: e.target.value })}
                 />
               </div>
+              
+              {/* Asset Return Condition - Show only when Return Date is filled */}
+              {hasReturnDate && (
+                <div className="space-y-2">
+                  <Label htmlFor="asset_return_condition">
+                    Asset Return Condition <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={formData.asset_return_condition}
+                    onValueChange={(value) => setFormData({ ...formData, asset_return_condition: value })}
+                  >
+                    <SelectTrigger data-testid="asset-return-condition-select">
+                      <SelectValue placeholder="Select condition" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Good">Good</SelectItem>
+                      <SelectItem value="Damaged">Damaged</SelectItem>
+                      <SelectItem value="Needs Repair">Needs Repair</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              
               <div className="space-y-2">
                 <Label htmlFor="remarks">Remarks (Optional)</Label>
                 <Input
