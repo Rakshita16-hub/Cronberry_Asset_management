@@ -763,6 +763,83 @@ async def download_assignments_template(current_user: dict = Depends(get_current
         headers={"Content-Disposition": "attachment; filename=assignments_template.xlsx"}
     )
 
+@api_router.get("/sim-connections")
+async def get_sim_connections(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get all assignments with mobile assets
+    assignments = await db.assignments.find({}, {"_id": 0}).to_list(1000)
+    
+    sim_connections = []
+    for assignment in assignments:
+        # Get asset to check category
+        asset = await db.assets.find_one({"asset_id": assignment["asset_id"]}, {"_id": 0})
+        
+        if asset and asset.get("category", "").lower() == "mobile":
+            # Only include if SIM details exist
+            if assignment.get("sim_mobile_number") or assignment.get("sim_provider"):
+                sim_connections.append({
+                    "assignment_id": assignment.get("assignment_id"),
+                    "sim_provider": assignment.get("sim_provider"),
+                    "sim_mobile_number": assignment.get("sim_mobile_number"),
+                    "sim_type": assignment.get("sim_type"),
+                    "sim_ownership": assignment.get("sim_ownership"),
+                    "sim_purpose": assignment.get("sim_purpose"),
+                    "employee_name": assignment.get("employee_name"),
+                    "asset_name": assignment.get("asset_name"),
+                    "assigned_date": assignment.get("assigned_date"),
+                    "return_date": assignment.get("return_date")
+                })
+    
+    return sim_connections
+
+@api_router.get("/sim-connections/export")
+async def export_sim_connections(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get all SIM connections
+    assignments = await db.assignments.find({}, {"_id": 0}).to_list(1000)
+    
+    sim_connections = []
+    for assignment in assignments:
+        asset = await db.assets.find_one({"asset_id": assignment["asset_id"]}, {"_id": 0})
+        if asset and asset.get("category", "").lower() == "mobile":
+            if assignment.get("sim_mobile_number") or assignment.get("sim_provider"):
+                sim_connections.append(assignment)
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "SIM Connections"
+    
+    headers = ["SIM Provider", "SIM Mobile Number", "SIM Type", "SIM Ownership", "SIM Purpose", 
+               "Employee Name", "Asset Name", "Assigned Date", "Return Date"]
+    ws.append(headers)
+    
+    for conn in sim_connections:
+        ws.append([
+            conn.get("sim_provider", ""),
+            conn.get("sim_mobile_number", ""),
+            conn.get("sim_type", ""),
+            conn.get("sim_ownership", ""),
+            conn.get("sim_purpose", ""),
+            conn.get("employee_name", ""),
+            conn.get("asset_name", ""),
+            conn.get("assigned_date", ""),
+            conn.get("return_date", "")
+        ])
+    
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=sim_connections.xlsx"}
+    )
+
 @api_router.get("/dashboard/stats", response_model=DashboardStats)
 async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in ["HR", "Admin"]:
