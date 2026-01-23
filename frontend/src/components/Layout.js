@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Package, ArrowRightLeft, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, Package, ArrowRightLeft, LogOut, Menu, X, Smartphone } from 'lucide-react';
 import { removeAuthToken } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { CronberryLogo } from '@/components/CronberryLogo';
@@ -10,6 +10,7 @@ const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
   { id: 'employees', label: 'Employees', icon: Users, path: '/employees' },
   { id: 'assets', label: 'Assets', icon: Package, path: '/assets' },
+  { id: 'sim-connections', label: 'SIM Connections', icon: Smartphone, path: '/sim-connections' },
   { id: 'assignments', label: 'Assignments', icon: ArrowRightLeft, path: '/assignments' },
 ];
 
