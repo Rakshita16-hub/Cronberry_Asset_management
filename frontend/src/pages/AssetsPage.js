@@ -50,6 +50,7 @@ export default function AssetsPage() {
         category: asset.category,
         brand: asset.brand,
         serial_number: asset.serial_number,
+        imei_2: asset.imei_2 || '',
         condition: asset.condition,
         status: asset.status,
       });
@@ -60,6 +61,7 @@ export default function AssetsPage() {
         category: '',
         brand: '',
         serial_number: '',
+        imei_2: '',
         condition: 'New',
         status: 'Available',
       });
