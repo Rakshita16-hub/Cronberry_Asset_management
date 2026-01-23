@@ -107,11 +107,24 @@ export default function AssignmentsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validation: Asset Return Condition is mandatory if Return Date is filled
+    if (formData.return_date && !formData.asset_return_condition) {
+      toast.error('Asset Return Condition is required when Return Date is provided');
+      return;
+    }
+    
     try {
       const payload = {
         ...formData,
         return_date: formData.return_date || null,
+        asset_return_condition: formData.asset_return_condition || null,
         remarks: formData.remarks || null,
+        sim_provider: formData.sim_provider || null,
+        sim_mobile_number: formData.sim_mobile_number || null,
+        sim_type: formData.sim_type || null,
+        sim_ownership: formData.sim_ownership || null,
+        sim_purpose: formData.sim_purpose || null,
       };
 
       if (editingAssignment) {
