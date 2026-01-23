@@ -125,6 +125,54 @@ export default function AssignmentsPage() {
     }
   };
 
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await api.get('/assignments/template', {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'assignments_template.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Template downloaded');
+    } catch (error) {
+      toast.error('Failed to download template');
+    }
+  };
+
+  const handleImport = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setImporting(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await api.post('/assignments/import', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      toast.success(response.data.message);
+      if (response.data.errors && response.data.errors.length > 0) {
+        console.error('Import errors:', response.data.errors);
+        toast.warning(`Some rows had errors. Check console for details.`);
+      }
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to import assignments');
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
       toast.error('Please enter a search query');
