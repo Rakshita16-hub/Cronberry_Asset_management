@@ -359,7 +359,6 @@ export default function AssetsPage() {
                       placeholder="Enter IMEI slot 1"
                       value={formData.serial_number}
                       onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
-                      required
                     />
                   </div>
                   <div className="space-y-2">
@@ -375,14 +374,19 @@ export default function AssetsPage() {
                 </>
               ) : (
                 <div className="space-y-2">
-                  <Label htmlFor="serial_number">Serial Number <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="serial_number">
+                    Serial Number 
+                    {isLaptopCategory && <span className="text-red-500"> *</span>}
+                    {!isLaptopCategory && <span className="text-slate-400 text-xs ml-1">(optional)</span>}
+                  </Label>
                   <Input
                     id="serial_number"
                     data-testid="asset-serial-input"
+                    placeholder={isLaptopCategory ? "Enter serial number" : "Enter serial number (optional)"}
                     value={formData.serial_number}
                     onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
-                    required
                   />
+                </div>
                 </div>
               )}
               
