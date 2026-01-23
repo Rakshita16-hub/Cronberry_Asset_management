@@ -74,13 +74,13 @@ export default function AssetsPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validation
+    // Validation - only mandatory for Mobile and Laptop categories
     if (isMobileCategory && !formData.serial_number) {
       toast.error('IMEI 1 is required for Mobile category');
       return;
     }
-    if (!isMobileCategory && !formData.serial_number) {
-      toast.error('Serial Number is required');
+    if (isLaptopCategory && !formData.serial_number) {
+      toast.error('Serial Number is required for Laptop category');
       return;
     }
     
