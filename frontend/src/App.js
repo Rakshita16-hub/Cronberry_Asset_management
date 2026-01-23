@@ -6,6 +6,7 @@ import DashboardPage from "@/pages/DashboardPage";
 import EmployeesPage from "@/pages/EmployeesPage";
 import AssetsPage from "@/pages/AssetsPage";
 import AssignmentsPage from "@/pages/AssignmentsPage";
+import SIMConnectionsPage from "@/pages/SIMConnectionsPage";
 import EmployeeDashboard from "@/pages/EmployeeDashboard";
 import Layout from "@/components/Layout";
 import EmployeeLayout from "@/components/EmployeeLayout";
@@ -34,6 +35,7 @@ function App() {
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="employees" element={<EmployeesPage />} />
             <Route path="assets" element={<AssetsPage />} />
+            <Route path="sim-connections" element={<SIMConnectionsPage />} />
             <Route path="assignments" element={<AssignmentsPage />} />
           </Route>
 
