@@ -26,7 +26,26 @@ export default function AssignmentsPage() {
     assigned_date: '',
     return_date: '',
     remarks: '',
+    sim_provider: '',
+    sim_mobile_number: '',
+    sim_type: '',
+    sim_ownership: '',
+    sim_purpose: '',
   });
+
+  // Check if selected asset is Mobile
+  const [selectedAssetCategory, setSelectedAssetCategory] = useState('');
+  
+  useEffect(() => {
+    if (formData.asset_id && assets.length > 0) {
+      const asset = assets.find(a => a.asset_id === formData.asset_id);
+      setSelectedAssetCategory(asset?.category || '');
+    } else {
+      setSelectedAssetCategory('');
+    }
+  }, [formData.asset_id, assets]);
+
+  const isMobileAsset = selectedAssetCategory.toLowerCase() === 'mobile';
 
   const fetchData = async () => {
     try {
