@@ -338,16 +338,45 @@ export default function AssetsPage() {
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="serial_number">Serial Number</Label>
-                <Input
-                  id="serial_number"
-                  data-testid="asset-serial-input"
-                  value={formData.serial_number}
-                  onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
-                  required
-                />
-              </div>
+              
+              {/* Conditional Fields based on Category */}
+              {isMobileCategory ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="imei_1">IMEI 1 <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="imei_1"
+                      data-testid="asset-imei1-input"
+                      placeholder="Enter IMEI slot 1"
+                      value={formData.serial_number}
+                      onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="imei_2">IMEI 2</Label>
+                    <Input
+                      id="imei_2"
+                      data-testid="asset-imei2-input"
+                      placeholder="Enter IMEI slot 2 (optional)"
+                      value={formData.imei_2}
+                      onChange={(e) => setFormData({ ...formData, imei_2: e.target.value })}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="serial_number">Serial Number <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="serial_number"
+                    data-testid="asset-serial-input"
+                    value={formData.serial_number}
+                    onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
+                    required
+                  />
+                </div>
+              )}
+              
               <div className="space-y-2">
                 <Label htmlFor="condition">Condition</Label>
                 <Select
