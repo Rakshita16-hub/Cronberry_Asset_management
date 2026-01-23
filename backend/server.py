@@ -705,6 +705,27 @@ async def import_assignments(file: UploadFile = File(...), current_user: dict = 
                 if 'Remarks' in df.columns and pd.notna(row.get('Remarks')):
                     remarks = str(row['Remarks'])
                 
+                # Parse SIM fields
+                sim_provider = None
+                if 'SIM Provider' in df.columns and pd.notna(row.get('SIM Provider')):
+                    sim_provider = str(row['SIM Provider'])
+                
+                sim_mobile_number = None
+                if 'SIM Mobile Number' in df.columns and pd.notna(row.get('SIM Mobile Number')):
+                    sim_mobile_number = str(row['SIM Mobile Number'])
+                
+                sim_type = None
+                if 'SIM Type' in df.columns and pd.notna(row.get('SIM Type')):
+                    sim_type = str(row['SIM Type'])
+                
+                sim_ownership = None
+                if 'SIM Ownership' in df.columns and pd.notna(row.get('SIM Ownership')):
+                    sim_ownership = str(row['SIM Ownership'])
+                
+                sim_purpose = None
+                if 'SIM Purpose' in df.columns and pd.notna(row.get('SIM Purpose')):
+                    sim_purpose = str(row['SIM Purpose'])
+                
                 # Create assignment
                 assignment_data = {
                     "assignment_id": assignment_id,
@@ -714,7 +735,12 @@ async def import_assignments(file: UploadFile = File(...), current_user: dict = 
                     "asset_name": asset["asset_name"],
                     "assigned_date": assigned_date,
                     "return_date": return_date,
-                    "remarks": remarks
+                    "remarks": remarks,
+                    "sim_provider": sim_provider,
+                    "sim_mobile_number": sim_mobile_number,
+                    "sim_type": sim_type,
+                    "sim_ownership": sim_ownership,
+                    "sim_purpose": sim_purpose
                 }
                 
                 await db.assignments.insert_one(assignment_data)
