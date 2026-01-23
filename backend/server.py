@@ -116,6 +116,7 @@ class Assignment(BaseModel):
     asset_name: str
     assigned_date: str
     return_date: Optional[str] = None
+    asset_return_condition: Optional[str] = None
     remarks: Optional[str] = None
     sim_provider: Optional[str] = None
     sim_mobile_number: Optional[str] = None
@@ -128,6 +129,7 @@ class AssignmentCreate(BaseModel):
     asset_id: str
     assigned_date: str
     return_date: Optional[str] = None
+    asset_return_condition: Optional[str] = None
     remarks: Optional[str] = None
     sim_provider: Optional[str] = None
     sim_mobile_number: Optional[str] = None
