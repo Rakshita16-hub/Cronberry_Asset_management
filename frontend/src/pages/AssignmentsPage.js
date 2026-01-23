@@ -25,6 +25,7 @@ export default function AssignmentsPage() {
     asset_id: '',
     assigned_date: '',
     return_date: '',
+    asset_return_condition: '',
     remarks: '',
     sim_provider: '',
     sim_mobile_number: '',
@@ -46,6 +47,7 @@ export default function AssignmentsPage() {
   }, [formData.asset_id, assets]);
 
   const isMobileAsset = selectedAssetCategory.toLowerCase() === 'mobile';
+  const hasReturnDate = !!formData.return_date;
 
   const fetchData = async () => {
     try {
