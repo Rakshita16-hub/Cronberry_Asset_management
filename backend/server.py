@@ -117,6 +117,11 @@ class Assignment(BaseModel):
     assigned_date: str
     return_date: Optional[str] = None
     remarks: Optional[str] = None
+    sim_provider: Optional[str] = None
+    sim_mobile_number: Optional[str] = None
+    sim_type: Optional[str] = None
+    sim_ownership: Optional[str] = None
+    sim_purpose: Optional[str] = None
 
 class AssignmentCreate(BaseModel):
     employee_id: str
@@ -124,6 +129,11 @@ class AssignmentCreate(BaseModel):
     assigned_date: str
     return_date: Optional[str] = None
     remarks: Optional[str] = None
+    sim_provider: Optional[str] = None
+    sim_mobile_number: Optional[str] = None
+    sim_type: Optional[str] = None
+    sim_ownership: Optional[str] = None
+    sim_purpose: Optional[str] = None
 
 class DashboardStats(BaseModel):
     total_assets: int
