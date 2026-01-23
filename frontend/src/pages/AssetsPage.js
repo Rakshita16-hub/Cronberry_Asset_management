@@ -25,7 +25,9 @@ export default function AssetsPage() {
     status: 'Available',
   });
 
-  const isMobileCategory = formData.category === 'Mobile';
+  const isMobileCategory = formData.category.toLowerCase() === 'mobile';
+  const isLaptopCategory = formData.category.toLowerCase() === 'laptop';
+  const requiresSerialOrIMEI = isMobileCategory || isLaptopCategory;
 
   const fetchAssets = async () => {
     try {
