@@ -484,11 +484,12 @@ async def download_assets_template(current_user: dict = Depends(get_current_user
     ws = wb.active
     ws.title = "Assets Template"
     
-    headers = ["Asset Name", "Category", "Brand", "Serial Number", "Condition", "Status"]
+    headers = ["Asset Name", "Category", "Brand", "Serial Number", "IMEI 2", "Condition", "Status"]
     ws.append(headers)
     
     # Add sample data
-    ws.append(["Dell Laptop", "Electronics", "Dell", "DL123456", "New", "Available"])
+    ws.append(["Dell Laptop", "Electronics", "Dell", "DL123456", "", "New", "Available"])
+    ws.append(["iPhone 15", "Mobile", "Apple", "356789012345678", "356789012345679", "New", "Available"])
     
     output = BytesIO()
     wb.save(output)
