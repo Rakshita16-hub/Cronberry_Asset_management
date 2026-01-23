@@ -413,6 +413,89 @@ export default function AssignmentsPage() {
                   onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
                 />
               </div>
+              
+              {/* SIM Connection Details - Show only for Mobile assets */}
+              {isMobileAsset && (
+                <>
+                  <div className="col-span-2 mt-6 pt-6 border-t border-slate-200">
+                    <h3 className="text-lg font-semibold text-[#0B1F3A] mb-4">SIM Connection Details (Optional)</h3>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="sim_provider">SIM Provider</Label>
+                    <Select
+                      value={formData.sim_provider}
+                      onValueChange={(value) => setFormData({ ...formData, sim_provider: value })}
+                    >
+                      <SelectTrigger data-testid="sim-provider-select">
+                        <SelectValue placeholder="Select provider" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Airtel">Airtel</SelectItem>
+                        <SelectItem value="Jio">Jio</SelectItem>
+                        <SelectItem value="Vi">Vi</SelectItem>
+                        <SelectItem value="BSNL">BSNL</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="sim_mobile_number">SIM Mobile Number</Label>
+                    <Input
+                      id="sim_mobile_number"
+                      data-testid="sim-mobile-number-input"
+                      placeholder="Enter mobile number"
+                      value={formData.sim_mobile_number}
+                      onChange={(e) => setFormData({ ...formData, sim_mobile_number: e.target.value })}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="sim_type">SIM Type</Label>
+                    <Select
+                      value={formData.sim_type}
+                      onValueChange={(value) => setFormData({ ...formData, sim_type: value })}
+                    >
+                      <SelectTrigger data-testid="sim-type-select">
+                        <SelectValue placeholder="Select SIM type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Physical SIM">Physical SIM</SelectItem>
+                        <SelectItem value="eSIM">eSIM</SelectItem>
+                        <SelectItem value="WhatsApp Only">WhatsApp Only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="sim_ownership">SIM Ownership</Label>
+                    <Select
+                      value={formData.sim_ownership}
+                      onValueChange={(value) => setFormData({ ...formData, sim_ownership: value })}
+                    >
+                      <SelectTrigger data-testid="sim-ownership-select">
+                        <SelectValue placeholder="Select ownership" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="With Employee">With Employee</SelectItem>
+                        <SelectItem value="With HR/Office">With HR/Office</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="col-span-2 space-y-2">
+                    <Label htmlFor="sim_purpose">SIM Purpose / Remarks</Label>
+                    <Input
+                      id="sim_purpose"
+                      data-testid="sim-purpose-input"
+                      placeholder="Enter purpose or remarks"
+                      value={formData.sim_purpose}
+                      onChange={(e) => setFormData({ ...formData, sim_purpose: e.target.value })}
+                    />
+                  </div>
+                </>
+              )}
             </div>
             <DialogFooter>
               <Button data-testid="assignment-form-submit" type="submit">
