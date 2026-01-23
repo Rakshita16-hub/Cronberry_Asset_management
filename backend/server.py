@@ -192,6 +192,7 @@ async def global_search(q: str, current_user: dict = Depends(get_current_user)):
             {"asset_name": {"$regex": q, "$options": "i"}},
             {"category": {"$regex": q, "$options": "i"}},
             {"serial_number": {"$regex": q, "$options": "i"}},
+            {"imei_2": {"$regex": q, "$options": "i"}},
             {"asset_id": {"$regex": q, "$options": "i"}}
         ]
     }
