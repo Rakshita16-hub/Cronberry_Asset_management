@@ -102,7 +102,7 @@ class AssetCreate(BaseModel):
     asset_name: str
     category: str
     brand: str
-    serial_number: str
+    serial_number: Optional[str] = None
     imei_2: Optional[str] = None
     condition: str = "New"
     status: str = "Available"
