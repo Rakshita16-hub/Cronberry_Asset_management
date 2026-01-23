@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Download, Search } from 'lucide-react';
+import { Download, Search, Upload, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function SIMConnectionsPage() {
@@ -10,6 +10,8 @@ export default function SIMConnectionsPage() {
   const [filteredConnections, setFilteredConnections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
 
   const fetchSIMConnections = async () => {
     try {
@@ -60,6 +62,54 @@ export default function SIMConnectionsPage() {
     }
   };
 
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await api.get('/assignments/template', {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'sim_connections_template.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Template downloaded');
+    } catch (error) {
+      toast.error('Failed to download template');
+    }
+  };
+
+  const handleImport = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setImporting(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await api.post('/assignments/import', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      toast.success(response.data.message);
+      if (response.data.errors && response.data.errors.length > 0) {
+        console.error('Import errors:', response.data.errors);
+        toast.warning(`Some rows had errors. Check console for details.`);
+      }
+      fetchSIMConnections();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to import SIM connections');
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -75,15 +125,44 @@ export default function SIMConnectionsPage() {
           <h1 className="text-4xl font-bold tracking-tight text-[#0B1F3A]">SIM Connections</h1>
           <p className="text-slate-600 mt-2">Track official SIM numbers and usage</p>
         </div>
-        <Button
-          data-testid="export-sim-button"
-          variant="outline"
-          onClick={handleExport}
-          className="border-slate-300"
-        >
-          <Download className="h-4 w-4 mr-2" />
-          Export
-        </Button>
+        <div className="flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleImport}
+            className="hidden"
+            data-testid="import-sim-file-input"
+          />
+          <Button
+            data-testid="download-sim-template-button"
+            variant="outline"
+            onClick={handleDownloadTemplate}
+            className="border-slate-300"
+          >
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            Template
+          </Button>
+          <Button
+            data-testid="import-sim-button"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="border-slate-300"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            {importing ? 'Importing...' : 'Import'}
+          </Button>
+          <Button
+            data-testid="export-sim-button"
+            variant="outline"
+            onClick={handleExport}
+            className="border-slate-300"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+        </div>
       </div>
 
       <div className="mb-6">
@@ -102,8 +181,11 @@ export default function SIMConnectionsPage() {
 
       {filteredConnections.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-          <p className="text-slate-600">
+          <p className="text-slate-600 mb-4">
             {searchQuery ? 'No SIM connections found matching your search.' : 'No SIM connections recorded yet.'}
+          </p>
+          <p className="text-sm text-slate-500">
+            SIM connections are automatically created when you assign a Mobile asset with SIM details through the Assignments page.
           </p>
         </div>
       ) : (
