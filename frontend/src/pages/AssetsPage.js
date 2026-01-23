@@ -236,26 +236,33 @@ export default function AssetsPage() {
       <div className="bg-white rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-muted/50 border-b border-border">
+            <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">ID</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Asset Name</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Category</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Brand</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Serial #</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Condition</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">ID</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Asset Name</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Category</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Brand</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Serial / IMEI</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Condition</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-slate-200">
               {assets.map((asset) => (
-                <tr key={asset.asset_id} className="hover:bg-muted/50 transition-colors" data-testid={`asset-row-${asset.asset_id}`}>
+                <tr key={asset.asset_id} className="hover:bg-slate-50 transition-colors" data-testid={`asset-row-${asset.asset_id}`}>
                   <td className="px-6 py-4 text-sm">{asset.asset_id}</td>
                   <td className="px-6 py-4 text-sm font-medium">{asset.asset_name}</td>
                   <td className="px-6 py-4 text-sm">{asset.category}</td>
                   <td className="px-6 py-4 text-sm">{asset.brand}</td>
-                  <td className="px-6 py-4 text-sm">{asset.serial_number}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <div>
+                      <div className="font-medium">{asset.serial_number}</div>
+                      {asset.imei_2 && asset.category === 'Mobile' && (
+                        <div className="text-xs text-slate-500">IMEI 2: {asset.imei_2}</div>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-6 py-4 text-sm">
                     <span className="px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
                       {asset.condition}
