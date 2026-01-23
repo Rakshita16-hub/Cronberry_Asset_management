@@ -20,9 +20,12 @@ export default function AssetsPage() {
     category: '',
     brand: '',
     serial_number: '',
+    imei_2: '',
     condition: 'New',
     status: 'Available',
   });
+
+  const isMobileCategory = formData.category === 'Mobile';
 
   const fetchAssets = async () => {
     try {
