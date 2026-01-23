@@ -918,7 +918,9 @@ async def export_assignments(current_user: dict = Depends(get_current_user)):
     ws = wb.active
     ws.title = "Asset Assignments"
     
-    headers = ["Assignment ID", "Employee ID", "Employee Name", "Asset ID", "Asset Name", "Assigned Date", "Return Date", "Remarks"]
+    headers = ["Assignment ID", "Employee ID", "Employee Name", "Asset ID", "Asset Name", 
+               "Assigned Date", "Return Date", "Remarks",
+               "SIM Provider", "SIM Mobile Number", "SIM Type", "SIM Ownership", "SIM Purpose"]
     ws.append(headers)
     
     for assignment in assignments:
@@ -930,7 +932,12 @@ async def export_assignments(current_user: dict = Depends(get_current_user)):
             assignment.get("asset_name", ""),
             assignment.get("assigned_date", ""),
             assignment.get("return_date", ""),
-            assignment.get("remarks", "")
+            assignment.get("remarks", ""),
+            assignment.get("sim_provider", ""),
+            assignment.get("sim_mobile_number", ""),
+            assignment.get("sim_type", ""),
+            assignment.get("sim_ownership", ""),
+            assignment.get("sim_purpose", "")
         ])
     
     output = BytesIO()
