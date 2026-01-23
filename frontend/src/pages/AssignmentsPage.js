@@ -77,6 +77,11 @@ export default function AssignmentsPage() {
         assigned_date: assignment.assigned_date,
         return_date: assignment.return_date || '',
         remarks: assignment.remarks || '',
+        sim_provider: assignment.sim_provider || '',
+        sim_mobile_number: assignment.sim_mobile_number || '',
+        sim_type: assignment.sim_type || '',
+        sim_ownership: assignment.sim_ownership || '',
+        sim_purpose: assignment.sim_purpose || '',
       });
     } else {
       setEditingAssignment(null);
@@ -86,6 +91,11 @@ export default function AssignmentsPage() {
         assigned_date: '',
         return_date: '',
         remarks: '',
+        sim_provider: '',
+        sim_mobile_number: '',
+        sim_type: '',
+        sim_ownership: '',
+        sim_purpose: '',
       });
     }
     setDialogOpen(true);
