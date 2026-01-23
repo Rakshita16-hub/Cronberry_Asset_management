@@ -71,6 +71,17 @@ export default function AssetsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validation
+    if (isMobileCategory && !formData.serial_number) {
+      toast.error('IMEI 1 is required for Mobile category');
+      return;
+    }
+    if (!isMobileCategory && !formData.serial_number) {
+      toast.error('Serial Number is required');
+      return;
+    }
+    
     try {
       if (editingAsset) {
         await api.put(`/assets/${editingAsset.asset_id}`, formData);
