@@ -746,12 +746,13 @@ async def download_assignments_template(current_user: dict = Depends(get_current
     ws = wb.active
     ws.title = "Assignments Template"
     
-    headers = ["Employee ID", "Employee Email", "Asset ID", "Asset Serial Number", "Assigned Date", "Return Date", "Remarks"]
+    headers = ["Employee ID", "Employee Email", "Asset ID", "Asset Serial Number", "Assigned Date", "Return Date", "Remarks",
+               "SIM Provider", "SIM Mobile Number", "SIM Type", "SIM Ownership", "SIM Purpose"]
     ws.append(headers)
     
     # Add sample data with instructions
-    ws.append(["EMP0001", "john@example.com", "AST0001", "SN123456", "2024-01-15", "", "New laptop for developer"])
-    ws.append(["", "jane@example.com", "", "SN789012", "2024-01-16", "2024-01-20", "Returned in good condition"])
+    ws.append(["EMP0001", "john@example.com", "AST0001", "SN123456", "2024-01-15", "", "New laptop for developer", "", "", "", "", ""])
+    ws.append(["", "jane@example.com", "", "356789012345678", "2024-01-16", "", "Mobile with SIM", "Jio", "9876543210", "Physical SIM", "With Employee", "Official number"])
     
     output = BytesIO()
     wb.save(output)
