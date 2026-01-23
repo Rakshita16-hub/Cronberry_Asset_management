@@ -607,6 +607,143 @@ async def delete_assignment(assignment_id: str, current_user: dict = Depends(get
     
     return {"message": "Assignment deleted successfully"}
 
+@api_router.post("/assignments/import")
+async def import_assignments(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    try:
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+        
+        # Check for required columns (flexible - either ID or Email/Serial)
+        has_employee_id = 'Employee ID' in df.columns
+        has_employee_email = 'Employee Email' in df.columns
+        has_asset_id = 'Asset ID' in df.columns
+        has_serial_number = 'Asset Serial Number' in df.columns
+        
+        if not (has_employee_id or has_employee_email):
+            raise HTTPException(status_code=400, detail="Excel file must contain either 'Employee ID' or 'Employee Email' column")
+        
+        if not (has_asset_id or has_serial_number):
+            raise HTTPException(status_code=400, detail="Excel file must contain either 'Asset ID' or 'Asset Serial Number' column")
+        
+        if 'Assigned Date' not in df.columns:
+            raise HTTPException(status_code=400, detail="Excel file must contain 'Assigned Date' column")
+        
+        imported_count = 0
+        errors = []
+        
+        for index, row in df.iterrows():
+            try:
+                # Find employee
+                employee = None
+                if has_employee_id and pd.notna(row.get('Employee ID')):
+                    employee = await db.employees.find_one({"employee_id": str(row['Employee ID'])}, {"_id": 0})
+                elif has_employee_email and pd.notna(row.get('Employee Email')):
+                    employee = await db.employees.find_one({"email": str(row['Employee Email'])}, {"_id": 0})
+                
+                if not employee:
+                    errors.append(f"Row {index + 2}: Employee not found")
+                    continue
+                
+                # Find asset
+                asset = None
+                if has_asset_id and pd.notna(row.get('Asset ID')):
+                    asset = await db.assets.find_one({"asset_id": str(row['Asset ID'])}, {"_id": 0})
+                elif has_serial_number and pd.notna(row.get('Asset Serial Number')):
+                    asset = await db.assets.find_one({"serial_number": str(row['Asset Serial Number'])}, {"_id": 0})
+                
+                if not asset:
+                    errors.append(f"Row {index + 2}: Asset not found")
+                    continue
+                
+                # Check if asset is already assigned
+                if asset["status"] == "Assigned":
+                    errors.append(f"Row {index + 2}: Asset {asset['asset_id']} is already assigned")
+                    continue
+                
+                # Generate or use provided Assignment ID
+                assignment_id = None
+                if 'Assignment ID' in df.columns and pd.notna(row.get('Assignment ID')):
+                    assignment_id = str(row['Assignment ID'])
+                    # Check if ID already exists
+                    existing = await db.assignments.find_one({"assignment_id": assignment_id}, {"_id": 0})
+                    if existing:
+                        errors.append(f"Row {index + 2}: Assignment ID {assignment_id} already exists")
+                        continue
+                else:
+                    count = await db.assignments.count_documents({})
+                    assignment_id = f"ASG{str(count + 1).zfill(4)}"
+                
+                # Parse dates
+                assigned_date = str(row['Assigned Date'])
+                return_date = None
+                if 'Return Date' in df.columns and pd.notna(row.get('Return Date')):
+                    return_date = str(row['Return Date'])
+                
+                remarks = None
+                if 'Remarks' in df.columns and pd.notna(row.get('Remarks')):
+                    remarks = str(row['Remarks'])
+                
+                # Create assignment
+                assignment_data = {
+                    "assignment_id": assignment_id,
+                    "employee_id": employee["employee_id"],
+                    "employee_name": employee["full_name"],
+                    "asset_id": asset["asset_id"],
+                    "asset_name": asset["asset_name"],
+                    "assigned_date": assigned_date,
+                    "return_date": return_date,
+                    "remarks": remarks
+                }
+                
+                await db.assignments.insert_one(assignment_data)
+                
+                # Update asset status
+                if return_date:
+                    await db.assets.update_one({"asset_id": asset["asset_id"]}, {"$set": {"status": "Available"}})
+                else:
+                    await db.assets.update_one({"asset_id": asset["asset_id"]}, {"$set": {"status": "Assigned"}})
+                
+                imported_count += 1
+            except Exception as e:
+                errors.append(f"Row {index + 2}: {str(e)}")
+        
+        return {
+            "message": f"Successfully imported {imported_count} asset assignments",
+            "imported": imported_count,
+            "errors": errors
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+
+@api_router.get("/assignments/template")
+async def download_assignments_template(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["HR", "Admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Assignments Template"
+    
+    headers = ["Employee ID", "Employee Email", "Asset ID", "Asset Serial Number", "Assigned Date", "Return Date", "Remarks"]
+    ws.append(headers)
+    
+    # Add sample data with instructions
+    ws.append(["EMP0001", "john@example.com", "AST0001", "SN123456", "2024-01-15", "", "New laptop for developer"])
+    ws.append(["", "jane@example.com", "", "SN789012", "2024-01-16", "2024-01-20", "Returned in good condition"])
+    
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=assignments_template.xlsx"}
+    )
+
 @api_router.get("/dashboard/stats", response_model=DashboardStats)
 async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in ["HR", "Admin"]:
