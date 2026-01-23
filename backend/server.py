@@ -422,6 +422,10 @@ async def import_assets(file: UploadFile = File(...), current_user: dict = Depen
                     "status": str(row['Status'])
                 }
                 
+                # Add IMEI 2 if present
+                if 'IMEI 2' in df.columns and pd.notna(row.get('IMEI 2')):
+                    asset_data["imei_2"] = str(row['IMEI 2'])
+                
                 await db.assets.insert_one(asset_data)
                 imported_count += 1
             except Exception as e:
