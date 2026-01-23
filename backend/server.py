@@ -94,6 +94,7 @@ class Asset(BaseModel):
     category: str
     brand: str
     serial_number: str
+    imei_2: Optional[str] = None
     condition: str
     status: str
 
@@ -102,6 +103,7 @@ class AssetCreate(BaseModel):
     category: str
     brand: str
     serial_number: str
+    imei_2: Optional[str] = None
     condition: str = "New"
     status: str = "Available"
 
