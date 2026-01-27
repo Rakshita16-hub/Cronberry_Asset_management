@@ -15,7 +15,12 @@ router.get('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
     res.json(sims);
   } catch (error) {
     console.error('Get SIM connections error:', error);
-    res.status(500).json({ detail: 'Failed to fetch SIM connections' });
+    console.error('Error stack:', error.stack);
+    console.error('Error message:', error.message);
+    res.status(500).json({ 
+      detail: 'Failed to fetch SIM connections',
+      error: error.message
+    });
   }
 });
 

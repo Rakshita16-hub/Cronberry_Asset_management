@@ -10,6 +10,7 @@ import { Plus, Edit, Trash2, Upload, Download, FileSpreadsheet } from 'lucide-re
 
 export default function AssetsPage() {
   const [assets, setAssets] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState(null);
@@ -23,6 +24,7 @@ export default function AssetsPage() {
     imei_2: '',
     condition: 'New',
     status: 'Available',
+    assigned_to: '',
   });
 
   const isMobileCategory = formData.category.toLowerCase() === 'mobile';
@@ -40,8 +42,18 @@ export default function AssetsPage() {
     }
   };
 
+  const fetchEmployees = async () => {
+    try {
+      const response = await api.get('/employees');
+      setEmployees(response.data);
+    } catch (error) {
+      toast.error('Failed to fetch employees');
+    }
+  };
+
   useEffect(() => {
     fetchAssets();
+    fetchEmployees();
   }, []);
 
   const handleOpenDialog = (asset = null) => {
@@ -55,6 +67,7 @@ export default function AssetsPage() {
         imei_2: asset.imei_2 || '',
         condition: asset.condition,
         status: asset.status,
+        assigned_to: asset.assigned_to || '',
       });
     } else {
       setEditingAsset(null);
@@ -66,6 +79,7 @@ export default function AssetsPage() {
         imei_2: '',
         condition: 'New',
         status: 'Available',
+        assigned_to: '',
       });
     }
     setDialogOpen(true);
@@ -84,12 +98,24 @@ export default function AssetsPage() {
       return;
     }
     
+    // Validation - assigned_to is required when status is Assigned
+    if (formData.status === 'Assigned' && !formData.assigned_to) {
+      toast.error('Please select an employee to assign the asset');
+      return;
+    }
+    
     try {
+      // Prepare data - only include assigned_to if status is Assigned
+      const submitData = { ...formData };
+      if (formData.status !== 'Assigned') {
+        delete submitData.assigned_to;
+      }
+      
       if (editingAsset) {
-        await api.put(`/assets/${editingAsset.asset_id}`, formData);
+        await api.put(`/assets/${editingAsset.asset_id}`, submitData);
         toast.success('Asset updated successfully');
       } else {
-        await api.post('/assets', formData);
+        await api.post('/assets', submitData);
         toast.success('Asset added successfully');
       }
       setDialogOpen(false);
@@ -409,17 +435,45 @@ export default function AssetsPage() {
                 <Label htmlFor="status">Status</Label>
                 <Select
                   value={formData.status}
-                  onValueChange={(value) => setFormData({ ...formData, status: value })}
+                  onValueChange={(value) => {
+                    const newFormData = { ...formData, status: value };
+                    // Clear assigned_to if status is not Assigned
+                    if (value !== 'Assigned') {
+                      newFormData.assigned_to = '';
+                    }
+                    setFormData(newFormData);
+                  }}
                 >
                   <SelectTrigger data-testid="asset-status-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Available">Available</SelectItem>
+                    <SelectItem value="Assigned">Assigned</SelectItem>
                     <SelectItem value="Under Repair">Under Repair</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              {formData.status === 'Assigned' && (
+                <div className="space-y-2">
+                  <Label htmlFor="assigned_to">Assigned To <span className="text-red-500">*</span></Label>
+                  <Select
+                    value={formData.assigned_to}
+                    onValueChange={(value) => setFormData({ ...formData, assigned_to: value })}
+                  >
+                    <SelectTrigger data-testid="asset-assigned-to-select">
+                      <SelectValue placeholder="Select employee" />
+                    </SelectTrigger>
+                    <SelectContent position="popper" sideOffset={5}>
+                      {employees.map((emp) => (
+                        <SelectItem key={emp.employee_id} value={emp.employee_id}>
+                          {emp.full_name} ({emp.employee_id})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button data-testid="asset-form-submit" type="submit">
