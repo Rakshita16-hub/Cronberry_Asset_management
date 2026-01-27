@@ -596,6 +596,26 @@ async def create_assignment(assignment: AssignmentCreate, current_user: dict = D
     await db.assignments.insert_one(assignment_dict)
     await db.assets.update_one({"asset_id": assignment.asset_id}, {"$set": {"status": "Assigned"}})
     
+    # Auto-create/update SIM Connection if mobile asset with SIM details
+    if asset.get("category", "").lower() == "mobile" and assignment.sim_mobile_number:
+        sim_data = {
+            "sim_mobile_number": assignment.sim_mobile_number,
+            "current_owner_name": employee["full_name"],
+            "connection_status": "Active",
+            "sim_status": "Assigned" if assignment.sim_ownership == "With Employee" else "In Stock",
+            "remarks": assignment.sim_purpose or ""
+        }
+        
+        # Check if SIM already exists
+        existing_sim = await db.sim_connections.find_one({"sim_mobile_number": assignment.sim_mobile_number})
+        if existing_sim:
+            await db.sim_connections.update_one(
+                {"sim_mobile_number": assignment.sim_mobile_number},
+                {"$set": sim_data}
+            )
+        else:
+            await db.sim_connections.insert_one(sim_data)
+    
     return Assignment(**assignment_dict)
 
 @api_router.put("/assignments/{assignment_id}", response_model=Assignment)
