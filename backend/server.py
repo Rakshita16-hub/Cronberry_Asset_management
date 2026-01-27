@@ -644,20 +644,49 @@ async def update_assignment(assignment_id: str, assignment: AssignmentCreate, cu
         # Asset is being returned
         if assignment.asset_return_condition:
             if assignment.asset_return_condition == "Good":
-                # Good condition: Available and Good
                 await db.assets.update_one(
                     {"asset_id": assignment.asset_id}, 
                     {"$set": {"status": "Available", "condition": "Good"}}
                 )
             elif assignment.asset_return_condition in ["Damaged", "Needs Repair"]:
-                # Damaged or Needs Repair: Under Repair and Damaged
                 await db.assets.update_one(
                     {"asset_id": assignment.asset_id}, 
                     {"$set": {"status": "Under Repair", "condition": "Damaged"}}
                 )
         else:
-            # No condition specified, just mark as Available
             await db.assets.update_one({"asset_id": assignment.asset_id}, {"$set": {"status": "Available"}})
+        
+        # Update SIM Connection on return
+        if existing.get("sim_mobile_number"):
+            await db.sim_connections.update_one(
+                {"sim_mobile_number": existing["sim_mobile_number"]},
+                {"$set": {
+                    "sim_status": "In Stock",
+                    "current_owner_name": "Office",
+                    "connection_status": "Active"
+                }}
+            )
+    elif not assignment.return_date and existing.get("return_date"):
+        await db.assets.update_one({"asset_id": assignment.asset_id}, {"$set": {"status": "Assigned"}})
+    
+    # Update SIM Connection if SIM details changed
+    if asset.get("category", "").lower() == "mobile" and assignment.sim_mobile_number:
+        sim_data = {
+            "sim_mobile_number": assignment.sim_mobile_number,
+            "current_owner_name": employee["full_name"] if not assignment.return_date else "Office",
+            "connection_status": "Active",
+            "sim_status": "In Stock" if assignment.return_date else ("Assigned" if assignment.sim_ownership == "With Employee" else "In Stock"),
+            "remarks": assignment.sim_purpose or ""
+        }
+        
+        existing_sim = await db.sim_connections.find_one({"sim_mobile_number": assignment.sim_mobile_number})
+        if existing_sim:
+            await db.sim_connections.update_one(
+                {"sim_mobile_number": assignment.sim_mobile_number},
+                {"$set": sim_data}
+            )
+        else:
+            await db.sim_connections.insert_one(sim_data)
     elif not assignment.return_date and existing.get("return_date"):
         # Return date removed, mark as Assigned again
         await db.assets.update_one({"asset_id": assignment.asset_id}, {"$set": {"status": "Assigned"}})
