@@ -137,6 +137,21 @@ class AssignmentCreate(BaseModel):
     sim_ownership: Optional[str] = None
     sim_purpose: Optional[str] = None
 
+class SIMConnection(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    sim_mobile_number: str
+    current_owner_name: str
+    connection_status: str
+    sim_status: str
+    remarks: Optional[str] = None
+
+class SIMConnectionCreate(BaseModel):
+    sim_mobile_number: str
+    current_owner_name: str
+    connection_status: str = "Active"
+    sim_status: str = "In Stock"
+    remarks: Optional[str] = None
+
 class DashboardStats(BaseModel):
     total_assets: int
     assigned_assets: int
