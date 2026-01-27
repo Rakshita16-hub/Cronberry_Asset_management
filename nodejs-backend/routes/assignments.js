@@ -17,6 +17,112 @@ router.get('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   }
 });
 
+// Create assignment
+router.post('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
+  try {
+    const { 
+      employee_id, 
+      asset_id, 
+      assigned_date, 
+      return_date, 
+      asset_return_condition, 
+      remarks,
+      sim_provider,
+      sim_mobile_number,
+      sim_type,
+      sim_ownership,
+      sim_purpose
+    } = req.body;
+
+    // Validate required fields
+    if (!employee_id || !asset_id || !assigned_date) {
+      return res.status(400).json({ detail: 'Employee ID, Asset ID, and Assigned Date are required' });
+    }
+
+    // Fetch employee details
+    const [employees] = await db.query(
+      'SELECT employee_id, full_name FROM employees WHERE employee_id = ?',
+      [employee_id]
+    );
+
+    if (employees.length === 0) {
+      return res.status(400).json({ detail: 'Employee not found' });
+    }
+
+    const employee = employees[0];
+
+    // Fetch asset details
+    const [assets] = await db.query(
+      'SELECT asset_id, asset_name, status FROM assets WHERE asset_id = ?',
+      [asset_id]
+    );
+
+    if (assets.length === 0) {
+      return res.status(400).json({ detail: 'Asset not found' });
+    }
+
+    const asset = assets[0];
+
+    // Check if asset is already assigned
+    if (asset.status === 'Assigned') {
+      // Check if there's an existing active assignment for this asset
+      const [existingAssignments] = await db.query(
+        'SELECT * FROM assignments WHERE asset_id = ? AND return_date IS NULL',
+        [asset_id]
+      );
+
+      if (existingAssignments.length > 0) {
+        return res.status(400).json({ 
+          detail: 'Asset is already assigned to another employee',
+          existing_assignment: existingAssignments[0]
+        });
+      }
+    }
+
+    // Generate assignment_id
+    const [countResult] = await db.query('SELECT COUNT(*) as count FROM assignments');
+    const assignment_id = `ASG${String(countResult[0].count + 1).padStart(4, '0')}`;
+
+    // Create assignment
+    await db.query(
+      'INSERT INTO assignments (assignment_id, employee_id, employee_name, asset_id, asset_name, assigned_date, return_date, asset_return_condition, remarks, sim_provider, sim_mobile_number, sim_type, sim_ownership, sim_purpose) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        assignment_id,
+        employee.employee_id,
+        employee.full_name,
+        asset.asset_id,
+        asset.asset_name,
+        assigned_date,
+        return_date || null,
+        asset_return_condition || null,
+        remarks || null,
+        sim_provider || null,
+        sim_mobile_number || null,
+        sim_type || null,
+        sim_ownership || null,
+        sim_purpose || null
+      ]
+    );
+
+    // Update asset status to "Assigned"
+    await db.query(
+      'UPDATE assets SET status = ? WHERE asset_id = ?',
+      ['Assigned', asset_id]
+    );
+
+    // Fetch created assignment
+    const [createdAssignment] = await db.query(
+      'SELECT * FROM assignments WHERE assignment_id = ?',
+      [assignment_id]
+    );
+
+    res.status(201).json(createdAssignment[0]);
+  } catch (error) {
+    console.error('Create assignment error:', error);
+    res.status(500).json({ detail: 'Failed to create assignment', error: error.message });
+  }
+});
+
 // Update assignment
 router.put('/:assignment_id', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
