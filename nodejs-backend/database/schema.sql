@@ -79,14 +79,32 @@ CREATE TABLE assignments (
     FOREIGN KEY (asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE
 );
 
+-- SIM Connections Table (Independent Master Table)
+CREATE TABLE sim_connections (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    sim_mobile_number VARCHAR(20) UNIQUE NOT NULL,
+    current_owner_name VARCHAR(255) NOT NULL,
+    connection_status ENUM('Active', 'Inactive') DEFAULT 'Active',
+    sim_status ENUM('Assigned', 'In Stock') DEFAULT 'In Stock',
+    remarks TEXT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_sim_mobile_number (sim_mobile_number),
+    INDEX idx_connection_status (connection_status),
+    INDEX idx_sim_status (sim_status)
+);
+
 -- Insert default admin user (password: admin123)
 INSERT INTO users (username, password, role) VALUES 
 ('admin', '$2a$10$XqN8Y8CqvVZhqKGvEJv0JuZYmF7pV7nXqPLHZZ0KY7BvYZx8.lQ8K', 'HR');
 
--- Sample data for testing (optional)
+-- Sample data for testing
 INSERT INTO employees (employee_id, full_name, department, designation, email, date_of_joining, status) VALUES
 ('EMP0001', 'Test Employee UI', 'IT', 'Software Engineer', 'test@example.com', '2024-01-15', 'Active');
 
 INSERT INTO assets (asset_id, asset_name, category, brand, serial_number, condition_status, status) VALUES
 ('AST0001', 'Dell Laptop', 'Electronics', 'Dell', 'DL123456', 'New', 'Available'),
 ('AST0002', 'iPhone 15', 'Mobile', 'Apple', '123456789012345', 'New', 'Available');
+
+INSERT INTO sim_connections (sim_mobile_number, current_owner_name, connection_status, sim_status, remarks) VALUES
+('9876543210', 'Office', 'Active', 'In Stock', 'Available for new employee');
