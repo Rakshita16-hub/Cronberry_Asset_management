@@ -45,6 +45,7 @@ CREATE TABLE assets (
     imei_2 VARCHAR(255) DEFAULT NULL,
     condition_status ENUM('New', 'Good', 'Damaged') DEFAULT 'New',
     status ENUM('Available', 'Assigned', 'Under Repair') DEFAULT 'Available',
+    remarks TEXT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_asset_id (asset_id),

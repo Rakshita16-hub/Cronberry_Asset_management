@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
+import { formatDisplayDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Download, Search, Upload, FileSpreadsheet } from 'lucide-react';
@@ -244,7 +245,7 @@ export default function SIMConnectionsPage() {
                     <td className="px-6 py-4 text-sm max-w-xs truncate">{conn.sim_purpose || '-'}</td>
                     <td className="px-6 py-4 text-sm">{conn.employee_name}</td>
                     <td className="px-6 py-4 text-sm">{conn.asset_name}</td>
-                    <td className="px-6 py-4 text-sm">{conn.assigned_date}</td>
+                    <td className="px-6 py-4 text-sm">{formatDisplayDate(conn.assigned_date)}</td>
                   </tr>
                 ))}
               </tbody>

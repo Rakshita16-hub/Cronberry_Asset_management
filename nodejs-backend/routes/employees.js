@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const { auth, requireRole } = require('../middleware/auth');
+const { formatDisplayDate } = require('../utils/dateFormat');
 const ExcelJS = require('exceljs');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
@@ -138,7 +139,7 @@ router.get('/export', auth, requireRole(['HR', 'Admin']), async (req, res) => {
     ];
 
     employees.forEach(emp => {
-      worksheet.addRow(emp);
+      worksheet.addRow({ ...emp, date_of_joining: formatDisplayDate(emp.date_of_joining) });
     });
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

@@ -25,6 +25,7 @@ export default function AssetsPage() {
     condition: 'New',
     status: 'Available',
     assigned_to: '',
+    remarks: '',
   });
 
   const isMobileCategory = formData.category.toLowerCase() === 'mobile';
@@ -68,6 +69,7 @@ export default function AssetsPage() {
         condition: asset.condition,
         status: asset.status,
         assigned_to: asset.assigned_to || '',
+        remarks: asset.remarks || '',
       });
     } else {
       setEditingAsset(null);
@@ -80,6 +82,7 @@ export default function AssetsPage() {
         condition: 'New',
         status: 'Available',
         assigned_to: '',
+        remarks: '',
       });
     }
     setDialogOpen(true);
@@ -474,6 +477,17 @@ export default function AssetsPage() {
                   </Select>
                 </div>
               )}
+              <div className="space-y-2 col-span-2">
+                <Label htmlFor="remarks">Remarks (Optional)</Label>
+                <Input
+                  id="remarks"
+                  data-testid="asset-remarks-input"
+                  placeholder="Enter remarks or notes"
+                  value={formData.remarks}
+                  onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+                  className="resize-none"
+                />
+              </div>
             </div>
             <DialogFooter>
               <Button data-testid="asset-form-submit" type="submit">

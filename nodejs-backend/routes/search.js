@@ -3,7 +3,28 @@ const router = express.Router();
 const db = require('../config/database');
 const { auth, requireRole } = require('../middleware/auth');
 
-// Search endpoint
+// Search employees only (for assignments etc.)
+router.get('/employees', auth, requireRole(['HR', 'Admin']), async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q) {
+      return res.json([]);
+    }
+    const searchTerm = `%${q}%`;
+    const [employees] = await db.query(
+      `SELECT employee_id, full_name, department, designation, email 
+       FROM employees 
+       WHERE full_name LIKE ? OR employee_id LIKE ? OR email LIKE ? OR department LIKE ?`,
+      [searchTerm, searchTerm, searchTerm, searchTerm]
+    );
+    res.json(employees);
+  } catch (error) {
+    console.error('Employee search error:', error);
+    res.status(500).json({ detail: 'Failed to perform employee search' });
+  }
+});
+
+// Search endpoint (employees, assets, assignments)
 router.get('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
     const { q } = req.query;

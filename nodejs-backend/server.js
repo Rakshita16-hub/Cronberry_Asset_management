@@ -32,6 +32,7 @@ app.use('/api/assets', assetsRoutes);
 app.use('/api/assignments', assignmentsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/global-search', searchRoutes);
 app.use('/api/sim-connections', simRoutes);
 app.use('/api/pending-returns', pendingReturnsRoutes);
 

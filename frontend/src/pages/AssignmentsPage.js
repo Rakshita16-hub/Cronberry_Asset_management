@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
+import { formatDisplayDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -73,11 +74,15 @@ export default function AssignmentsPage() {
   const handleOpenDialog = (assignment = null) => {
     if (assignment) {
       setEditingAssignment(assignment);
+      const assignedDateVal = assignment.assigned_date;
+      const returnDateVal = assignment.return_date;
+      const assignedDateStr = assignedDateVal ? String(assignedDateVal).slice(0, 10) : '';
+      const returnDateStr = returnDateVal ? String(returnDateVal).slice(0, 10) : '';
       setFormData({
         employee_id: assignment.employee_id,
         asset_id: assignment.asset_id,
-        assigned_date: assignment.assigned_date,
-        return_date: assignment.return_date || '',
+        assigned_date: assignedDateStr,
+        return_date: returnDateStr,
         asset_return_condition: assignment.asset_return_condition || '',
         remarks: assignment.remarks || '',
         sim_provider: assignment.sim_provider || '',
@@ -317,10 +322,10 @@ export default function AssignmentsPage() {
                     <div className="font-medium">{assignment.asset_name}</div>
                     <div className="text-muted-foreground text-xs">{assignment.asset_id}</div>
                   </td>
-                  <td className="px-6 py-4 text-sm">{assignment.assigned_date}</td>
+                  <td className="px-6 py-4 text-sm">{formatDisplayDate(assignment.assigned_date)}</td>
                   <td className="px-6 py-4 text-sm">
                     {assignment.return_date ? (
-                      assignment.return_date
+                      formatDisplayDate(assignment.return_date)
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}
@@ -585,7 +590,7 @@ export default function AssignmentsPage() {
                             <div key={asset.assignment_id} className="bg-muted/30 rounded p-2 text-sm">
                               <p className="font-medium">{asset.asset_name}</p>
                               <p className="text-xs text-muted-foreground">
-                                ID: {asset.asset_id} • Assigned: {asset.assigned_date}
+                                ID: {asset.asset_id} • Assigned: {formatDisplayDate(asset.assigned_date)}
                               </p>
                             </div>
                           ))}

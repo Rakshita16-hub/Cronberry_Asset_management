@@ -42,12 +42,14 @@ export default function EmployeesPage() {
   const handleOpenDialog = (employee = null) => {
     if (employee) {
       setEditingEmployee(employee);
+      const dateVal = employee.date_of_joining;
+      const dateStr = dateVal ? String(dateVal).slice(0, 10) : '';
       setFormData({
         full_name: employee.full_name,
         department: employee.department,
         designation: employee.designation,
         email: employee.email,
-        date_of_joining: employee.date_of_joining,
+        date_of_joining: dateStr,
         status: employee.status,
       });
     } else {

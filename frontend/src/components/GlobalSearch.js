@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import api from '@/lib/api';
+import { formatDisplayDate } from '@/lib/utils';
 import { Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -31,33 +32,45 @@ export const GlobalSearch = () => {
   const handleInputChange = (e) => {
     const value = e.target.value;
     setSearchQuery(value);
-    if (value.length >= 2) {
-      handleSearch(value);
-    } else {
+    if (value.length < 2) {
       setSearchResults(null);
     }
+  };
+
+  const runSearch = (e) => {
+    e?.preventDefault();
+    handleSearch(searchQuery);
   };
 
   const hasResults = searchResults && (searchResults.employees?.length > 0 || searchResults.assets?.length > 0);
 
   return (
     <>
-      <div className="relative w-full max-w-xl">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-        <Input
-          data-testid="global-search-input"
-          type="text"
-          placeholder="Search by Employee, Asset or Serial Number..."
-          value={searchQuery}
-          onChange={handleInputChange}
-          className="pl-10 pr-4 w-full"
-        />
-        {loading && (
-          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-            <div className="animate-spin h-4 w-4 border-2 border-[#D81B60] border-t-transparent rounded-full"></div>
-          </div>
-        )}
-      </div>
+      <form onSubmit={runSearch} className="relative w-full max-w-xl flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+          <Input
+            data-testid="global-search-input"
+            type="text"
+            placeholder="Search by Employee, Asset or Serial Number..."
+            value={searchQuery}
+            onChange={handleInputChange}
+            className="pl-10 pr-4 w-full"
+          />
+          {loading && (
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+              <div className="animate-spin h-4 w-4 border-2 border-[#D81B60] border-t-transparent rounded-full"></div>
+            </div>
+          )}
+        </div>
+        <button
+          type="submit"
+          disabled={loading || searchQuery.length < 2}
+          className="px-4 py-2 rounded-md bg-[#D81B60] text-white font-medium hover:bg-[#c2185b] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+        >
+          Search
+        </button>
+      </form>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
@@ -163,7 +176,7 @@ export const GlobalSearch = () => {
                           {asset.assigned_to.employee_name} ({asset.assigned_to.employee_id})
                         </p>
                         <p className="text-xs text-slate-500">
-                          Since: {asset.assigned_to.assigned_date}
+                          Since: {formatDisplayDate(asset.assigned_to.assigned_date)}
                         </p>
                       </div>
                     )}

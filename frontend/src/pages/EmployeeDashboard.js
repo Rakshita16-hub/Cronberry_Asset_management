@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatDisplayDate } from '@/lib/utils';
 import api from '@/lib/api';
 import { User, Package, Calendar, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -69,7 +70,7 @@ export default function EmployeeDashboard() {
                 </div>
                 <div>
                   <p className="text-slate-600">Date of Joining</p>
-                  <p className="font-medium text-[#0B1F3A]">{profile.date_of_joining}</p>
+                  <p className="font-medium text-[#0B1F3A]">{formatDisplayDate(profile.date_of_joining)}</p>
                 </div>
                 <div>
                   <p className="text-slate-600">Status</p>
@@ -125,7 +126,7 @@ export default function EmployeeDashboard() {
                           <Calendar className="h-4 w-4 text-slate-400" />
                           <div>
                             <p className="text-slate-600">Assigned Date</p>
-                            <p className="font-medium text-[#0B1F3A]">{assignment.assigned_date}</p>
+                            <p className="font-medium text-[#0B1F3A]">{formatDisplayDate(assignment.assigned_date)}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -133,7 +134,7 @@ export default function EmployeeDashboard() {
                           <div>
                             <p className="text-slate-600">Return Date</p>
                             <p className="font-medium text-[#0B1F3A]">
-                              {assignment.return_date || 'Not returned yet'}
+                              {assignment.return_date ? formatDisplayDate(assignment.return_date) : 'Not returned yet'}
                             </p>
                           </div>
                         </div>

@@ -10,7 +10,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 router.get('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
     const [assets] = await db.query(
-      'SELECT asset_id, asset_name, category, brand, serial_number, imei_2, condition_status as `condition`, status FROM assets ORDER BY id DESC'
+      'SELECT asset_id, asset_name, category, brand, serial_number, imei_2, condition_status as `condition`, status, remarks FROM assets ORDER BY id DESC'
     );
     res.json(assets);
   } catch (error) {
@@ -22,7 +22,7 @@ router.get('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
 // Create asset
 router.post('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
-    const { asset_name, category, brand, serial_number, imei_2, condition, status, assigned_to, assigned_date } = req.body;
+    const { asset_name, category, brand, serial_number, imei_2, condition, status, assigned_to, assigned_date, remarks } = req.body;
 
     // Validate: If status is "Assigned", assigned_to (employee_id) is required
     if (status === 'Assigned' && !assigned_to) {
@@ -38,8 +38,8 @@ router.post('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
 
     // Create the asset
     await db.query(
-      'INSERT INTO assets (asset_id, asset_name, category, brand, serial_number, imei_2, condition_status, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [asset_id, asset_name, category, brand, serial_number || null, imei_2 || null, condition || 'New', validStatus]
+      'INSERT INTO assets (asset_id, asset_name, category, brand, serial_number, imei_2, condition_status, status, remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [asset_id, asset_name, category, brand, serial_number || null, imei_2 || null, condition || 'New', validStatus, remarks || null]
     );
 
     let assignment = null;
@@ -90,6 +90,7 @@ router.post('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
       imei_2: imei_2 || null,
       condition: condition || 'New',
       status: validStatus,
+      remarks: remarks || null,
       assignment: assignment || null
     });
   } catch (error) {
@@ -102,11 +103,11 @@ router.post('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
 router.put('/:asset_id', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
     const { asset_id } = req.params;
-    const { asset_name, category, brand, serial_number, imei_2, condition, status } = req.body;
+    const { asset_name, category, brand, serial_number, imei_2, condition, status, remarks } = req.body;
 
     const [result] = await db.query(
-      'UPDATE assets SET asset_name = ?, category = ?, brand = ?, serial_number = ?, imei_2 = ?, condition_status = ?, status = ? WHERE asset_id = ?',
-      [asset_name, category, brand, serial_number || null, imei_2 || null, condition, status, asset_id]
+      'UPDATE assets SET asset_name = ?, category = ?, brand = ?, serial_number = ?, imei_2 = ?, condition_status = ?, status = ?, remarks = ? WHERE asset_id = ?',
+      [asset_name, category, brand, serial_number || null, imei_2 || null, condition, status, remarks ?? null, asset_id]
     );
 
     if (result.affectedRows === 0) {
@@ -121,7 +122,8 @@ router.put('/:asset_id', auth, requireRole(['HR', 'Admin']), async (req, res) =>
       serial_number: serial_number || null,
       imei_2: imei_2 || null,
       condition,
-      status
+      status,
+      remarks: remarks ?? null
     });
   } catch (error) {
     console.error('Update asset error:', error);
@@ -191,9 +193,10 @@ router.get('/template', auth, requireRole(['HR', 'Admin']), async (req, res) => 
       { header: 'IMEI 2', key: 'imei_2', width: 25 },
       { header: 'Condition', key: 'condition', width: 15 },
       { header: 'Status', key: 'status', width: 15 },
-      { header: 'Assigned To (Employee ID)', key: 'employee_id', width: 25 },
+      { header: 'Assigned To (Employee Name)', key: 'employee_name', width: 30 },
       { header: 'Assigned To (Employee Email)', key: 'employee_email', width: 30 },
-      { header: 'Assigned Date', key: 'assigned_date', width: 15 }
+      { header: 'Assigned Date', key: 'assigned_date', width: 15 },
+      { header: 'Remarks', key: 'remarks', width: 40 }
     ];
 
     worksheet.addRow({
@@ -204,9 +207,10 @@ router.get('/template', auth, requireRole(['HR', 'Admin']), async (req, res) => 
       imei_2: '',
       condition: 'New',
       status: 'Available',
-      employee_id: '',
+      employee_name: '',
       employee_email: '',
-      assigned_date: ''
+      assigned_date: '',
+      remarks: ''
     });
     
     worksheet.addRow({
@@ -217,9 +221,10 @@ router.get('/template', auth, requireRole(['HR', 'Admin']), async (req, res) => 
       imei_2: '356789012345679',
       condition: 'New',
       status: 'Assigned',
-      employee_id: 'EMP0001',
-      employee_email: '',
-      assigned_date: '2024-01-20'
+      employee_name: 'Test Employee UI',
+      employee_email: 'test@example.com',
+      assigned_date: '2024-01-20',
+      remarks: ''
     });
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -261,24 +266,30 @@ router.post('/import', auth, requireRole(['HR', 'Admin']), upload.single('file')
           const imei2 = row.getCell(5).value || null;
           const condition = row.getCell(6).value || 'New';
           const status = row.getCell(7).value || 'Available';
-          const employeeIdOrEmail = row.getCell(8).value || row.getCell(9).value;
+          const employeeName = (row.getCell(8).value && String(row.getCell(8).value).trim()) || null;
+          const employeeEmail = (row.getCell(9).value && String(row.getCell(9).value).trim()) || null;
           const assignedDate = row.getCell(10).value || new Date().toISOString().split('T')[0];
+          const remarks = (row.getCell(11).value && String(row.getCell(11).value).trim()) || null;
 
-          // Validation: If status is Assigned, employee is required
+          // Validation: If status is Assigned, employee name or email is required
           if (status === 'Assigned') {
-            if (!employeeIdOrEmail) {
-              errors.push(`Row ${i}: Employee is required when Asset Status is Assigned.`);
+            if (!employeeName && !employeeEmail) {
+              errors.push(`Row ${i}: Employee Name or Email is required when Asset Status is Assigned.`);
               continue;
             }
 
-            // Find employee
+            // Find employee by name or email
             const [employees] = await connection.query(
-              'SELECT * FROM employees WHERE employee_id = ? OR email = ? LIMIT 1',
-              [employeeIdOrEmail, employeeIdOrEmail]
+              employeeName && employeeEmail
+                ? 'SELECT * FROM employees WHERE full_name = ? OR email = ? LIMIT 1'
+                : employeeName
+                  ? 'SELECT * FROM employees WHERE full_name = ? LIMIT 1'
+                  : 'SELECT * FROM employees WHERE email = ? LIMIT 1',
+              employeeName && employeeEmail ? [employeeName, employeeEmail] : employeeName ? [employeeName] : [employeeEmail]
             );
 
             if (employees.length === 0) {
-              errors.push(`Row ${i}: Employee not found. Please provide a valid Employee ID or Email.`);
+              errors.push(`Row ${i}: Employee not found. Please provide a valid Employee Name or Email.`);
               continue;
             }
 
@@ -289,8 +300,8 @@ router.post('/import', auth, requireRole(['HR', 'Admin']), upload.single('file')
             const assetId = `AST${String(countResult[0].count + 1).padStart(4, '0')}`;
 
             await connection.query(
-              'INSERT INTO assets (asset_id, asset_name, category, brand, serial_number, imei_2, condition_status, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-              [assetId, assetName, category, brand, serialNumber, imei2, condition, status]
+              'INSERT INTO assets (asset_id, asset_name, category, brand, serial_number, imei_2, condition_status, status, remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [assetId, assetName, category, brand, serialNumber, imei2, condition, status, remarks]
             );
 
             // Auto-create assignment
@@ -309,8 +320,8 @@ router.post('/import', auth, requireRole(['HR', 'Admin']), upload.single('file')
             const assetId = `AST${String(countResult[0].count + 1).padStart(4, '0')}`;
 
             await connection.query(
-              'INSERT INTO assets (asset_id, asset_name, category, brand, serial_number, imei_2, condition_status, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-              [assetId, assetName, category, brand, serialNumber, imei2, condition, status]
+              'INSERT INTO assets (asset_id, asset_name, category, brand, serial_number, imei_2, condition_status, status, remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [assetId, assetName, category, brand, serialNumber, imei2, condition, status, remarks]
             );
 
             imported++;

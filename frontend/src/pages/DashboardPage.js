@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '@/lib/api';
+import { formatDisplayDate } from '@/lib/utils';
 import { Package, CheckCircle, Clock, Users, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -130,7 +131,7 @@ export default function DashboardPage() {
                           >
                             <p className="font-medium text-orange-900">{asset.asset_name}</p>
                             <p className="text-orange-700 text-xs mt-1">
-                              Asset ID: {asset.asset_id} • Assigned: {asset.assigned_date}
+                              Asset ID: {asset.asset_id} • Assigned: {formatDisplayDate(asset.assigned_date)}
                             </p>
                           </div>
                         ))}
