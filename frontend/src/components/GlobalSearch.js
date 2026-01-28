@@ -46,7 +46,7 @@ export const GlobalSearch = () => {
 
   return (
     <>
-      <form onSubmit={runSearch} className="relative w-full max-w-xl flex gap-2">
+      <form onSubmit={runSearch} className="relative max-w-xl flex gap-2 items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
           <Input
@@ -55,7 +55,7 @@ export const GlobalSearch = () => {
             placeholder="Search by Employee, Asset or Serial Number..."
             value={searchQuery}
             onChange={handleInputChange}
-            className="pl-10 pr-4 w-full"
+            className="pl-10 pr-4 w-full h-10"
           />
           {loading && (
             <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -66,7 +66,7 @@ export const GlobalSearch = () => {
         <button
           type="submit"
           disabled={loading || searchQuery.length < 2}
-          className="px-4 py-2 rounded-md bg-[#D81B60] text-white font-medium hover:bg-[#c2185b] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+          className="px-4 h-10 rounded-md bg-[#D81B60] text-white font-medium hover:bg-[#c2185b] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 flex items-center"
         >
           Search
         </button>

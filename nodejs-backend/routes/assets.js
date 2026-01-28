@@ -21,65 +21,75 @@ router.get('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
 
 // Create asset
 router.post('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
+  const { asset_name, category, brand, serial_number, imei_2, condition, status, assigned_to, assigned_date, remarks } = req.body;
+
+  // Validate: If status is "Assigned", assigned_to (employee_id) is required
+  if (status === 'Assigned' && !assigned_to) {
+    return res.status(400).json({ detail: 'Employee ID (assigned_to) is required when status is "Assigned"' });
+  }
+
+  const connection = await db.getConnection();
+  
   try {
-    const { asset_name, category, brand, serial_number, imei_2, condition, status, assigned_to, assigned_date, remarks } = req.body;
-
-    // Validate: If status is "Assigned", assigned_to (employee_id) is required
-    if (status === 'Assigned' && !assigned_to) {
-      return res.status(400).json({ detail: 'Employee ID (assigned_to) is required when status is "Assigned"' });
-    }
-
     // Determine the final status
     const validStatus = status || 'Available';
 
+    // Start transaction
+    await connection.beginTransaction();
+
     // Generate asset_id
-    const [countResult] = await db.query('SELECT COUNT(*) as count FROM assets');
+    const [countResult] = await connection.query('SELECT COUNT(*) as count FROM assets');
     const asset_id = `AST${String(countResult[0].count + 1).padStart(4, '0')}`;
 
-    // Create the asset
-    await db.query(
+    // Step 1: Create the asset first
+    await connection.query(
       'INSERT INTO assets (asset_id, asset_name, category, brand, serial_number, imei_2, condition_status, status, remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [asset_id, asset_name, category, brand, serial_number || null, imei_2 || null, condition || 'New', validStatus, remarks || null]
     );
 
     let assignment = null;
 
-    // If status is "Assigned" and assigned_to is provided, create assignment automatically
+    // Step 2: If status is "Assigned" and assigned_to is provided, create assignment automatically
     if (validStatus === 'Assigned' && assigned_to) {
       // Fetch employee details
-      const [employees] = await db.query(
+      const [employees] = await connection.query(
         'SELECT employee_id, full_name FROM employees WHERE employee_id = ?',
         [assigned_to]
       );
 
       if (employees.length === 0) {
-        // Rollback asset creation if employee not found
-        await db.query('DELETE FROM assets WHERE asset_id = ?', [asset_id]);
+        // Rollback transaction if employee not found
+        await connection.rollback();
+        connection.release();
         return res.status(400).json({ detail: 'Employee not found. Please provide a valid Employee ID.' });
       }
 
       const employee = employees[0];
 
       // Generate assignment_id
-      const [assignCountResult] = await db.query('SELECT COUNT(*) as count FROM assignments');
+      const [assignCountResult] = await connection.query('SELECT COUNT(*) as count FROM assignments');
       const assignment_id = `ASG${String(assignCountResult[0].count + 1).padStart(4, '0')}`;
 
       // Use provided assigned_date or default to today
       const assignmentDate = assigned_date || new Date().toISOString().split('T')[0];
 
       // Create assignment
-      await db.query(
+      await connection.query(
         'INSERT INTO assignments (assignment_id, employee_id, employee_name, asset_id, asset_name, assigned_date) VALUES (?, ?, ?, ?, ?, ?)',
         [assignment_id, employee.employee_id, employee.full_name, asset_id, asset_name, assignmentDate]
       );
 
       // Fetch the created assignment
-      const [createdAssignment] = await db.query(
+      const [createdAssignment] = await connection.query(
         'SELECT * FROM assignments WHERE assignment_id = ?',
         [assignment_id]
       );
       assignment = createdAssignment[0];
     }
+
+    // Commit transaction
+    await connection.commit();
+    connection.release();
 
     res.status(201).json({
       asset_id,
@@ -94,6 +104,9 @@ router.post('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
       assignment: assignment || null
     });
   } catch (error) {
+    // Rollback transaction on error
+    await connection.rollback();
+    connection.release();
     console.error('Create asset error:', error);
     res.status(500).json({ detail: 'Failed to create asset', error: error.message });
   }

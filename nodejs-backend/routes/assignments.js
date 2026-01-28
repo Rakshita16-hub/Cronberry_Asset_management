@@ -104,10 +104,35 @@ router.post('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
       ]
     );
 
-    // Update asset status to "Assigned"
+    // Update asset status and condition based on return_date and asset_return_condition
+    const assetUpdateFields = [];
+    const assetUpdateValues = [];
+
+    // Update asset status
+    if (return_date && return_date !== null) {
+      // If return_date is set, asset should be "Available"
+      assetUpdateFields.push('status = ?');
+      assetUpdateValues.push('Available');
+    } else {
+      // Otherwise, asset should be "Assigned"
+      assetUpdateFields.push('status = ?');
+      assetUpdateValues.push('Assigned');
+    }
+
+    // Update asset condition_status based on asset_return_condition
+    if (asset_return_condition === 'Damaged' || asset_return_condition === 'Needs Repair') {
+      assetUpdateFields.push('condition_status = ?');
+      assetUpdateValues.push('Damaged');
+    } else if (asset_return_condition === 'Good') {
+      assetUpdateFields.push('condition_status = ?');
+      assetUpdateValues.push('Good');
+    }
+
+    // Update asset
+    assetUpdateValues.push(asset_id);
     await db.query(
-      'UPDATE assets SET status = ? WHERE asset_id = ?',
-      ['Assigned', asset_id]
+      `UPDATE assets SET ${assetUpdateFields.join(', ')} WHERE asset_id = ?`,
+      assetUpdateValues
     );
 
     // Fetch created assignment
@@ -140,6 +165,18 @@ router.put('/:assignment_id', auth, requireRole(['HR', 'Admin']), async (req, re
       sim_ownership,
       sim_purpose
     } = req.body;
+
+    // Fetch current assignment to get asset_id if not provided in request
+    const [currentAssignment] = await db.query(
+      'SELECT asset_id FROM assignments WHERE assignment_id = ?',
+      [assignment_id]
+    );
+
+    if (currentAssignment.length === 0) {
+      return res.status(404).json({ detail: 'Assignment not found' });
+    }
+
+    const currentAssetId = asset_id || currentAssignment[0].asset_id;
 
     // Fetch employee name if employee_id is provided
     let employee_name = null;
@@ -237,6 +274,34 @@ router.put('/:assignment_id', auth, requireRole(['HR', 'Admin']), async (req, re
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ detail: 'Assignment not found' });
+    }
+
+    // Update asset status and condition based on return_date and asset_return_condition
+    const assetUpdateFields = [];
+    const assetUpdateValues = [];
+
+    // If return_date is set (not null), set asset status to "Available"
+    if (return_date !== undefined && return_date !== null) {
+      assetUpdateFields.push('status = ?');
+      assetUpdateValues.push('Available');
+    }
+
+    // Update asset condition_status based on asset_return_condition
+    if (asset_return_condition === 'Damaged' || asset_return_condition === 'Needs Repair') {
+      assetUpdateFields.push('condition_status = ?');
+      assetUpdateValues.push('Damaged');
+    } else if (asset_return_condition === 'Good') {
+      assetUpdateFields.push('condition_status = ?');
+      assetUpdateValues.push('Good');
+    }
+
+    // Update asset if there are fields to update
+    if (assetUpdateFields.length > 0) {
+      assetUpdateValues.push(currentAssetId);
+      await db.query(
+        `UPDATE assets SET ${assetUpdateFields.join(', ')} WHERE asset_id = ?`,
+        assetUpdateValues
+      );
     }
 
     // Fetch updated assignment

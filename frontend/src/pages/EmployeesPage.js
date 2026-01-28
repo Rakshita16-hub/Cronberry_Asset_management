@@ -14,6 +14,9 @@ export default function EmployeesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [departments, setDepartments] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
   const fileInputRef = useRef(null);
   const [formData, setFormData] = useState({
     full_name: '',
@@ -24,10 +27,35 @@ export default function EmployeesPage() {
     status: 'Active',
   });
 
+  const fetchDepartments = async () => {
+    try {
+      const response = await api.get('/employees/departments');
+      setDepartments(response.data);
+    } catch (error) {
+      console.error('Failed to fetch departments:', error);
+    }
+  };
+
   const fetchEmployees = async () => {
     try {
-      const response = await api.get('/employees');
-      setEmployees(response.data);
+      const params = {};
+      if (selectedDepartment && selectedDepartment !== 'all') {
+        params.department = selectedDepartment;
+      }
+      params.includeTotal = 'true';
+      
+      const response = await api.get('/employees', { params });
+      
+      // Handle both array and object response formats
+      if (Array.isArray(response.data)) {
+        setEmployees(response.data);
+        // Get total from header if available
+        const totalFromHeader = response.headers['x-total-count'];
+        setTotalCount(totalFromHeader ? parseInt(totalFromHeader) : response.data.length);
+      } else {
+        setEmployees(response.data.employees || []);
+        setTotalCount(response.data.total || 0);
+      }
     } catch (error) {
       toast.error('Failed to fetch employees');
     } finally {
@@ -36,8 +64,12 @@ export default function EmployeesPage() {
   };
 
   useEffect(() => {
-    fetchEmployees();
+    fetchDepartments();
   }, []);
+
+  useEffect(() => {
+    fetchEmployees();
+  }, [selectedDepartment]);
 
   const handleOpenDialog = (employee = null) => {
     if (employee) {
@@ -219,6 +251,25 @@ export default function EmployeesPage() {
         </div>
       </div>
 
+      <div className="mb-4 flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Label htmlFor="department-filter" className="text-sm font-medium text-muted-foreground">Filter by Department:</Label>
+          <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+            <SelectTrigger id="department-filter" className="w-[200px]">
+              <SelectValue placeholder="All Departments" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Departments</SelectItem>
+              {departments.map((dept) => (
+                <SelectItem key={dept} value={dept}>
+                  {dept}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -274,6 +325,19 @@ export default function EmployeesPage() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="px-6 py-4 bg-muted/30 border-t border-border">
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-muted-foreground">
+              Showing <span className="font-medium">{employees.length}</span> of <span className="font-medium">{totalCount}</span> employees
+              {selectedDepartment !== 'all' && (
+                <span className="ml-2">in <span className="font-medium">{selectedDepartment}</span> department</span>
+              )}
+            </p>
+            <p className="text-sm font-semibold text-[#0B1F3A]">
+              Total: {totalCount} employee{totalCount !== 1 ? 's' : ''}
+            </p>
+          </div>
         </div>
       </div>
 
