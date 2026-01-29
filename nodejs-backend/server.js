@@ -17,27 +17,40 @@ const allowedOrigins = [
   ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(o => o.trim()) : [])
 ];
 
-// Remove duplicates and normalize origins
-const normalizedOrigins = [...new Set(allowedOrigins)];
+// Remove duplicates and normalize origins (remove trailing slashes)
+const normalizedOrigins = [...new Set(allowedOrigins.map(o => o.replace(/\/$/, '')))];
+
+// Helper function to check if origin is allowed
+const isOriginAllowed = (origin) => {
+  if (!origin) return true; // Allow requests with no origin (curl, Postman, etc.)
+  
+  // Remove trailing slash for comparison
+  const normalizedOrigin = origin.replace(/\/$/, '');
+  
+  // Exact match
+  if (normalizedOrigins.includes(normalizedOrigin)) {
+    return true;
+  }
+  
+  // Allow any cronberry.com subdomain (for flexibility)
+  if (normalizedOrigin.match(/^https?:\/\/([a-zA-Z0-9-]+\.)*cronberry\.com$/)) {
+    return true;
+  }
+  
+  return false;
+};
 
 // CORS configuration
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (e.g. curl, Postman, server-to-server)
-    if (!origin) {
-      return callback(null, true);
+    if (isOriginAllowed(origin)) {
+      callback(null, true);
+    } else {
+      // Log rejected origins for debugging
+      console.log(`❌ CORS: Rejected origin: ${origin}`);
+      console.log(`✅ CORS: Allowed origins:`, normalizedOrigins);
+      callback(null, false);
     }
-    
-    // Check exact match
-    if (normalizedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    
-    // Log rejected origins for debugging (remove in production if needed)
-    console.log(`CORS: Rejected origin: ${origin}`);
-    console.log(`CORS: Allowed origins:`, normalizedOrigins);
-    
-    callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -78,9 +91,42 @@ app.use('/api/global-search', searchRoutes);
 app.use('/api/sim-connections', simRoutes);
 app.use('/api/pending-returns', pendingReturnsRoutes);
 
-// Health check
+// Health check (no DB required - use for load balancer / proxy)
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'Cronberry Assets Tracker API is running' });
+});
+
+// GET /api - root API info (prevents 502 when proxy hits /api)
+app.get('/api', (req, res) => {
+  res.json({
+    message: 'Cronberry Assets Tracker API',
+    version: '1.0',
+    docs: '/api',
+    endpoints: {
+      auth: '/api/auth',
+      health: '/health',
+      assets: '/api/assets',
+      employees: '/api/employees',
+      assignments: '/api/assignments',
+      dashboard: '/api/dashboard',
+    },
+  });
+});
+
+// CORS test endpoint (for debugging)
+app.get('/api/cors-test', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'CORS is working correctly',
+    origin: req.headers.origin || 'none',
+    allowedOrigins: normalizedOrigins,
+    isAllowed: isOriginAllowed(req.headers.origin)
+  });
+});
+
+// 404 - catch all unmatched routes (prevents hanging requests → 502)
+app.use((req, res) => {
+  res.status(404).json({ detail: 'Not found', path: req.path });
 });
 
 // Error handling

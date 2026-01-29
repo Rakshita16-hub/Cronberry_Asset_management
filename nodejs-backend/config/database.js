@@ -14,7 +14,7 @@ const pool = new Pool({
 });
 
 
-// Test database connection
+// Test database connection (non-fatal: server starts even if DB is down)
 pool
   .connect()
   .then(client => {
@@ -31,7 +31,8 @@ pool
   })
   .catch(err => {
     console.error('✗ PostgreSQL connection error:', err.message);
-    process.exit(1);
+    console.error('  Server will start but DB-dependent routes will fail until DB is reachable.');
+    // Do NOT process.exit(1) - allows /health and /api to respond (avoids 502 from proxy)
   });
 
 module.exports = pool;
