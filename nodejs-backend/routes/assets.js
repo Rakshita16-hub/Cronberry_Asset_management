@@ -9,13 +9,73 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Get all assets
 router.get('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
-    const [assets] = await db.query(
-      'SELECT asset_id, asset_name, category, brand, serial_number, imei_2, condition_status as `condition`, status, remarks FROM assets ORDER BY id DESC'
+    const result = await db.query(
+      'SELECT asset_id, asset_name, category, brand, serial_number, imei_2, condition_status AS condition, status, remarks FROM assets ORDER BY id DESC'
     );
-    res.json(assets);
+    
+    // For assets with status "Assigned", fetch assignment information
+    const assetsWithAssignments = await Promise.all(
+      result.rows.map(async (asset) => {
+        if (asset.status === 'Assigned') {
+          const assignmentResult = await db.query(
+            'SELECT employee_id, employee_name, assigned_date FROM assignments WHERE asset_id = $1 AND return_date IS NULL ORDER BY assigned_date DESC LIMIT 1',
+            [asset.asset_id]
+          );
+
+          if (assignmentResult.rows.length > 0) {
+            const assignment = assignmentResult.rows[0];
+            asset.assigned_to = assignment.employee_id;
+            asset.assigned_employee_name = assignment.employee_name;
+            asset.assigned_date = assignment.assigned_date;
+          }
+        }
+        return asset;
+      })
+    );
+
+    res.json(assetsWithAssignments);
   } catch (error) {
     console.error('Get assets error:', error);
     res.status(500).json({ detail: 'Failed to fetch assets' });
+  }
+});
+
+// Get single asset by asset_id (for editing)
+router.get('/:asset_id', auth, requireRole(['HR', 'Admin']), async (req, res) => {
+  try {
+    const { asset_id } = req.params;
+    
+    // Get asset details
+    const assetResult = await db.query(
+      'SELECT asset_id, asset_name, category, brand, serial_number, imei_2, condition_status AS condition, status, remarks FROM assets WHERE asset_id = $1',
+      [asset_id]
+    );
+
+    if (assetResult.rows.length === 0) {
+      return res.status(404).json({ detail: 'Asset not found' });
+    }
+
+    const asset = assetResult.rows[0];
+
+    // If status is Assigned, get the active assignment (where return_date is NULL)
+    if (asset.status === 'Assigned') {
+      const assignmentResult = await db.query(
+        'SELECT employee_id, employee_name, assigned_date FROM assignments WHERE asset_id = $1 AND return_date IS NULL ORDER BY assigned_date DESC LIMIT 1',
+        [asset_id]
+      );
+
+      if (assignmentResult.rows.length > 0) {
+        const assignment = assignmentResult.rows[0];
+        asset.assigned_to = assignment.employee_id;
+        asset.assigned_employee_name = assignment.employee_name;
+        asset.assigned_date = assignment.assigned_date;
+      }
+    }
+
+    res.json(asset);
+  } catch (error) {
+    console.error('Get asset error:', error);
+    res.status(500).json({ detail: 'Failed to fetch asset' });
   }
 });
 
@@ -28,22 +88,66 @@ router.post('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
     return res.status(400).json({ detail: 'Employee ID (assigned_to) is required when status is "Assigned"' });
   }
 
-  const connection = await db.getConnection();
+  // Category-based validation
+  const categoryLower = (category || '').toLowerCase().trim();
+  
+  if (categoryLower === 'laptop') {
+    if (!serial_number || serial_number.trim() === '') {
+      return res.status(400).json({ detail: 'Serial Number is required for Laptop category' });
+    }
+  } else if (categoryLower === 'mobile') {
+    // For mobile category, either IMEI1 (serial_number) or IMEI2 (imei_2) is required
+    if ((!serial_number || serial_number.trim() === '') && (!imei_2 || imei_2.trim() === '')) {
+      return res.status(400).json({ detail: 'Either IMEI1 Number (Serial Number) or IMEI2 Number is required for Mobile category' });
+    }
+  } else {
+    // For other categories (Other, electronic item, cable, mouse, etc.), serial_number is required
+    if (!serial_number || serial_number.trim() === '') {
+      return res.status(400).json({ detail: 'Serial Number is required for this category' });
+    }
+  }
+
+  const client = await db.connect();
   
   try {
+    // Check for duplicate serial_number (if provided)
+    if (serial_number && serial_number.trim() !== '') {
+      const { rows: existingSerial } = await client.query(
+        'SELECT asset_id FROM assets WHERE serial_number = $1',
+        [serial_number.trim()]
+      );
+      if (existingSerial.length > 0) {
+        client.release();
+        return res.status(400).json({ detail: `Serial Number "${serial_number}" already exists. Please use a unique serial number.` });
+      }
+    }
+
+    // Check for duplicate imei_2 (if provided)
+    if (imei_2 && imei_2.trim() !== '') {
+      const { rows: existingIMEI } = await client.query(
+        'SELECT asset_id FROM assets WHERE imei_2 = $1',
+        [imei_2.trim()]
+      );
+      if (existingIMEI.length > 0) {
+        client.release();
+        return res.status(400).json({ detail: `IMEI Number "${imei_2}" already exists. Please use a unique IMEI number.` });
+      }
+    }
+
     // Determine the final status
     const validStatus = status || 'Available';
 
     // Start transaction
-    await connection.beginTransaction();
+    await client.query('BEGIN');
 
     // Generate asset_id
-    const [countResult] = await connection.query('SELECT COUNT(*) as count FROM assets');
-    const asset_id = `AST${String(countResult[0].count + 1).padStart(4, '0')}`;
+    const { rows: countRows } = await client.query('SELECT COUNT(*) AS count FROM assets');
+    const currentCount = Number(countRows[0]?.count) || 0;
+    const asset_id = `AST${String(currentCount + 1).padStart(4, '0')}`;
 
     // Step 1: Create the asset first
-    await connection.query(
-      'INSERT INTO assets (asset_id, asset_name, category, brand, serial_number, imei_2, condition_status, status, remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    await client.query(
+      'INSERT INTO assets (asset_id, asset_name, category, brand, serial_number, imei_2, condition_status, status, remarks) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
       [asset_id, asset_name, category, brand, serial_number || null, imei_2 || null, condition || 'New', validStatus, remarks || null]
     );
 
@@ -52,44 +156,45 @@ router.post('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
     // Step 2: If status is "Assigned" and assigned_to is provided, create assignment automatically
     if (validStatus === 'Assigned' && assigned_to) {
       // Fetch employee details
-      const [employees] = await connection.query(
-        'SELECT employee_id, full_name FROM employees WHERE employee_id = ?',
+      const { rows: employees } = await client.query(
+        'SELECT employee_id, full_name FROM employees WHERE employee_id = $1',
         [assigned_to]
       );
 
       if (employees.length === 0) {
         // Rollback transaction if employee not found
-        await connection.rollback();
-        connection.release();
+        await client.query('ROLLBACK');
+        client.release();
         return res.status(400).json({ detail: 'Employee not found. Please provide a valid Employee ID.' });
       }
 
       const employee = employees[0];
 
       // Generate assignment_id
-      const [assignCountResult] = await connection.query('SELECT COUNT(*) as count FROM assignments');
-      const assignment_id = `ASG${String(assignCountResult[0].count + 1).padStart(4, '0')}`;
+      const { rows: assignCountRows } = await client.query('SELECT COUNT(*) AS count FROM assignments');
+      const currentAssignCount = Number(assignCountRows[0]?.count) || 0;
+      const assignment_id = `ASG${String(currentAssignCount + 1).padStart(4, '0')}`;
 
       // Use provided assigned_date or default to today
       const assignmentDate = assigned_date || new Date().toISOString().split('T')[0];
 
       // Create assignment
-      await connection.query(
-        'INSERT INTO assignments (assignment_id, employee_id, employee_name, asset_id, asset_name, assigned_date) VALUES (?, ?, ?, ?, ?, ?)',
+      await client.query(
+        'INSERT INTO assignments (assignment_id, employee_id, employee_name, asset_id, asset_name, assigned_date) VALUES ($1, $2, $3, $4, $5, $6)',
         [assignment_id, employee.employee_id, employee.full_name, asset_id, asset_name, assignmentDate]
       );
 
       // Fetch the created assignment
-      const [createdAssignment] = await connection.query(
-        'SELECT * FROM assignments WHERE assignment_id = ?',
+      const { rows: createdAssignmentRows } = await client.query(
+        'SELECT * FROM assignments WHERE assignment_id = $1',
         [assignment_id]
       );
-      assignment = createdAssignment[0];
+      assignment = createdAssignmentRows[0];
     }
 
     // Commit transaction
-    await connection.commit();
-    connection.release();
+    await client.query('COMMIT');
+    client.release();
 
     res.status(201).json({
       asset_id,
@@ -105,8 +210,8 @@ router.post('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
     });
   } catch (error) {
     // Rollback transaction on error
-    await connection.rollback();
-    connection.release();
+    await client.query('ROLLBACK');
+    client.release();
     console.error('Create asset error:', error);
     res.status(500).json({ detail: 'Failed to create asset', error: error.message });
   }
@@ -118,16 +223,67 @@ router.put('/:asset_id', auth, requireRole(['HR', 'Admin']), async (req, res) =>
     const { asset_id } = req.params;
     const { asset_name, category, brand, serial_number, imei_2, condition, status, remarks } = req.body;
 
-    const [result] = await db.query(
-      'UPDATE assets SET asset_name = ?, category = ?, brand = ?, serial_number = ?, imei_2 = ?, condition_status = ?, status = ?, remarks = ? WHERE asset_id = ?',
+    // Category-based validation
+    const categoryLower = (category || '').toLowerCase().trim();
+    
+    if (categoryLower === 'laptop') {
+      if (!serial_number || serial_number.trim() === '') {
+        return res.status(400).json({ detail: 'Serial Number is required for Laptop category' });
+      }
+    } else if (categoryLower === 'mobile') {
+      // For mobile category, either IMEI1 (serial_number) or IMEI2 (imei_2) is required
+      if ((!serial_number || serial_number.trim() === '') && (!imei_2 || imei_2.trim() === '')) {
+        return res.status(400).json({ detail: 'Either IMEI1 Number (Serial Number) or IMEI2 Number is required for Mobile category' });
+      }
+    } else {
+      // For other categories (Other, electronic item, cable, mouse, etc.), serial_number is required
+      if (!serial_number || serial_number.trim() === '') {
+        return res.status(400).json({ detail: 'Serial Number is required for this category' });
+      }
+    }
+
+    // Check for duplicate serial_number (if provided and different from current)
+    if (serial_number && serial_number.trim() !== '') {
+      const { rows: existingSerial } = await db.query(
+        'SELECT asset_id FROM assets WHERE serial_number = $1 AND asset_id != $2',
+        [serial_number.trim(), asset_id]
+      );
+      if (existingSerial.length > 0) {
+        return res.status(400).json({ detail: `Serial Number "${serial_number}" already exists. Please use a unique serial number.` });
+      }
+    }
+
+    // Check for duplicate imei_2 (if provided and different from current)
+    if (imei_2 && imei_2.trim() !== '') {
+      const { rows: existingIMEI } = await db.query(
+        'SELECT asset_id FROM assets WHERE imei_2 = $1 AND asset_id != $2',
+        [imei_2.trim(), asset_id]
+      );
+      if (existingIMEI.length > 0) {
+        return res.status(400).json({ detail: `IMEI Number "${imei_2}" already exists. Please use a unique IMEI number.` });
+      }
+    }
+
+    const result = await db.query(
+      `UPDATE assets
+       SET asset_name = $1,
+           category = $2,
+           brand = $3,
+           serial_number = $4,
+           imei_2 = $5,
+           condition_status = $6,
+           status = $7,
+           remarks = $8
+       WHERE asset_id = $9`,
       [asset_name, category, brand, serial_number || null, imei_2 || null, condition, status, remarks ?? null, asset_id]
     );
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ detail: 'Asset not found' });
     }
 
-    res.json({
+    // Build response object
+    const response = {
       asset_id,
       asset_name,
       category,
@@ -137,7 +293,24 @@ router.put('/:asset_id', auth, requireRole(['HR', 'Admin']), async (req, res) =>
       condition,
       status,
       remarks: remarks ?? null
-    });
+    };
+
+    // If status is Assigned, get the active assignment (where return_date is NULL)
+    if (status === 'Assigned') {
+      const assignmentResult = await db.query(
+        'SELECT employee_id, employee_name, assigned_date FROM assignments WHERE asset_id = $1 AND return_date IS NULL ORDER BY assigned_date DESC LIMIT 1',
+        [asset_id]
+      );
+
+      if (assignmentResult.rows.length > 0) {
+        const assignment = assignmentResult.rows[0];
+        response.assigned_to = assignment.employee_id;
+        response.assigned_employee_name = assignment.employee_name;
+        response.assigned_date = assignment.assigned_date;
+      }
+    }
+
+    res.json(response);
   } catch (error) {
     console.error('Update asset error:', error);
     res.status(500).json({ detail: 'Failed to update asset' });
@@ -148,9 +321,9 @@ router.put('/:asset_id', auth, requireRole(['HR', 'Admin']), async (req, res) =>
 router.delete('/:asset_id', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
     const { asset_id } = req.params;
-    const [result] = await db.query('DELETE FROM assets WHERE asset_id = ?', [asset_id]);
+    const result = await db.query('DELETE FROM assets WHERE asset_id = $1', [asset_id]);
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ detail: 'Asset not found' });
     }
 
@@ -164,7 +337,7 @@ router.delete('/:asset_id', auth, requireRole(['HR', 'Admin']), async (req, res)
 // Export assets
 router.get('/export', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
-    const [assets] = await db.query('SELECT * FROM assets');
+    const { rows: assets } = await db.query('SELECT * FROM assets');
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Assets');
@@ -263,10 +436,10 @@ router.post('/import', auth, requireRole(['HR', 'Admin']), upload.single('file')
 
     let imported = 0;
     const errors = [];
-    const connection = await db.getConnection();
+    const client = await db.connect();
 
     try {
-      await connection.beginTransaction();
+      await client.query('BEGIN');
 
       for (let i = 2; i <= worksheet.rowCount; i++) {
         const row = worksheet.getRow(i);
@@ -275,14 +448,60 @@ router.post('/import', auth, requireRole(['HR', 'Admin']), upload.single('file')
           const assetName = row.getCell(1).value;
           const category = row.getCell(2).value;
           const brand = row.getCell(3).value;
-          const serialNumber = row.getCell(4).value || null;
-          const imei2 = row.getCell(5).value || null;
+          const serialNumber = (row.getCell(4).value && String(row.getCell(4).value).trim()) || null;
+          const imei2 = (row.getCell(5).value && String(row.getCell(5).value).trim()) || null;
           const condition = row.getCell(6).value || 'New';
           const status = row.getCell(7).value || 'Available';
           const employeeName = (row.getCell(8).value && String(row.getCell(8).value).trim()) || null;
           const employeeEmail = (row.getCell(9).value && String(row.getCell(9).value).trim()) || null;
           const assignedDate = row.getCell(10).value || new Date().toISOString().split('T')[0];
           const remarks = (row.getCell(11).value && String(row.getCell(11).value).trim()) || null;
+
+          // Category-based validation
+          const categoryLower = (category || '').toLowerCase().trim();
+          
+          if (categoryLower === 'laptop') {
+            if (!serialNumber || serialNumber.trim() === '') {
+              errors.push(`Row ${i}: Serial Number is required for Laptop category.`);
+              continue;
+            }
+          } else if (categoryLower === 'mobile') {
+            // For mobile category, either IMEI1 (serialNumber) or IMEI2 (imei2) is required
+            if ((!serialNumber || serialNumber.trim() === '') && (!imei2 || imei2.trim() === '')) {
+              errors.push(`Row ${i}: Either IMEI1 Number (Serial Number) or IMEI2 Number is required for Mobile category.`);
+              continue;
+            }
+          } else {
+            // For other categories (Other, electronic item, cable, mouse, etc.), serial_number is required
+            if (!serialNumber || serialNumber.trim() === '') {
+              errors.push(`Row ${i}: Serial Number is required for this category.`);
+              continue;
+            }
+          }
+
+          // Check for duplicate serial_number (if provided)
+          if (serialNumber && serialNumber.trim() !== '') {
+            const { rows: existingSerial } = await client.query(
+              'SELECT asset_id FROM assets WHERE serial_number = $1',
+              [serialNumber.trim()]
+            );
+            if (existingSerial.length > 0) {
+              errors.push(`Row ${i}: Serial Number "${serialNumber}" already exists. Please use a unique serial number.`);
+              continue;
+            }
+          }
+
+          // Check for duplicate imei_2 (if provided)
+          if (imei2 && imei2.trim() !== '') {
+            const { rows: existingIMEI } = await client.query(
+              'SELECT asset_id FROM assets WHERE imei_2 = $1',
+              [imei2.trim()]
+            );
+            if (existingIMEI.length > 0) {
+              errors.push(`Row ${i}: IMEI Number "${imei2}" already exists. Please use a unique IMEI number.`);
+              continue;
+            }
+          }
 
           // Validation: If status is Assigned, employee name or email is required
           if (status === 'Assigned') {
@@ -291,15 +510,37 @@ router.post('/import', auth, requireRole(['HR', 'Admin']), upload.single('file')
               continue;
             }
 
-            // Find employee by name or email
-            const [employees] = await connection.query(
-              employeeName && employeeEmail
-                ? 'SELECT * FROM employees WHERE full_name = ? OR email = ? LIMIT 1'
-                : employeeName
-                  ? 'SELECT * FROM employees WHERE full_name = ? LIMIT 1'
-                  : 'SELECT * FROM employees WHERE email = ? LIMIT 1',
-              employeeName && employeeEmail ? [employeeName, employeeEmail] : employeeName ? [employeeName] : [employeeEmail]
-            );
+            // Find employee by name or email (case-insensitive)
+            let employees = [];
+            if (employeeName && employeeEmail) {
+              // Try to match both first (more accurate), then fallback to OR
+              const { rows: exactMatch } = await client.query(
+                'SELECT * FROM employees WHERE LOWER(TRIM(full_name)) = LOWER(TRIM($1)) AND LOWER(TRIM(email)) = LOWER(TRIM($2)) LIMIT 1',
+                [employeeName, employeeEmail]
+              );
+              if (exactMatch.length > 0) {
+                employees = exactMatch;
+              } else {
+                // Fallback to OR if exact match not found
+                const { rows: orMatch } = await client.query(
+                  'SELECT * FROM employees WHERE LOWER(TRIM(full_name)) = LOWER(TRIM($1)) OR LOWER(TRIM(email)) = LOWER(TRIM($2)) LIMIT 1',
+                  [employeeName, employeeEmail]
+                );
+                employees = orMatch;
+              }
+            } else if (employeeName) {
+              const { rows: nameMatch } = await client.query(
+                'SELECT * FROM employees WHERE LOWER(TRIM(full_name)) = LOWER(TRIM($1)) LIMIT 1',
+                [employeeName]
+              );
+              employees = nameMatch;
+            } else if (employeeEmail) {
+              const { rows: emailMatch } = await client.query(
+                'SELECT * FROM employees WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) LIMIT 1',
+                [employeeEmail]
+              );
+              employees = emailMatch;
+            }
 
             if (employees.length === 0) {
               errors.push(`Row ${i}: Employee not found. Please provide a valid Employee Name or Email.`);
@@ -309,31 +550,34 @@ router.post('/import', auth, requireRole(['HR', 'Admin']), upload.single('file')
             const employee = employees[0];
 
             // Create asset
-            const [countResult] = await connection.query('SELECT COUNT(*) as count FROM assets');
-            const assetId = `AST${String(countResult[0].count + 1).padStart(4, '0')}`;
+            const { rows: countRows } = await client.query('SELECT COUNT(*) AS count FROM assets');
+            const currentCount = Number(countRows[0]?.count) || 0;
+            const assetId = `AST${String(currentCount + 1).padStart(4, '0')}`;
 
-            await connection.query(
-              'INSERT INTO assets (asset_id, asset_name, category, brand, serial_number, imei_2, condition_status, status, remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            await client.query(
+              'INSERT INTO assets (asset_id, asset_name, category, brand, serial_number, imei_2, condition_status, status, remarks) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
               [assetId, assetName, category, brand, serialNumber, imei2, condition, status, remarks]
             );
 
             // Auto-create assignment
-            const [assignCountResult] = await connection.query('SELECT COUNT(*) as count FROM assignments');
-            const assignmentId = `ASG${String(assignCountResult[0].count + 1).padStart(4, '0')}`;
+            const { rows: assignCountRows } = await client.query('SELECT COUNT(*) AS count FROM assignments');
+            const currentAssignCount = Number(assignCountRows[0]?.count) || 0;
+            const assignmentId = `ASG${String(currentAssignCount + 1).padStart(4, '0')}`;
 
-            await connection.query(
-              'INSERT INTO assignments (assignment_id, employee_id, employee_name, asset_id, asset_name, assigned_date) VALUES (?, ?, ?, ?, ?, ?)',
+            await client.query(
+              'INSERT INTO assignments (assignment_id, employee_id, employee_name, asset_id, asset_name, assigned_date) VALUES ($1, $2, $3, $4, $5, $6)',
               [assignmentId, employee.employee_id, employee.full_name, assetId, assetName, assignedDate]
             );
 
             imported++;
           } else {
             // Regular asset import without assignment
-            const [countResult] = await connection.query('SELECT COUNT(*) as count FROM assets');
-            const assetId = `AST${String(countResult[0].count + 1).padStart(4, '0')}`;
+            const { rows: countRows } = await client.query('SELECT COUNT(*) AS count FROM assets');
+            const currentCount = Number(countRows[0]?.count) || 0;
+            const assetId = `AST${String(currentCount + 1).padStart(4, '0')}`;
 
-            await connection.query(
-              'INSERT INTO assets (asset_id, asset_name, category, brand, serial_number, imei_2, condition_status, status, remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            await client.query(
+              'INSERT INTO assets (asset_id, asset_name, category, brand, serial_number, imei_2, condition_status, status, remarks) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
               [assetId, assetName, category, brand, serialNumber, imei2, condition, status, remarks]
             );
 
@@ -344,12 +588,12 @@ router.post('/import', auth, requireRole(['HR', 'Admin']), upload.single('file')
         }
       }
 
-      await connection.commit();
+      await client.query('COMMIT');
     } catch (error) {
-      await connection.rollback();
+      await client.query('ROLLBACK');
       throw error;
     } finally {
-      connection.release();
+      client.release();
     }
 
     res.json({

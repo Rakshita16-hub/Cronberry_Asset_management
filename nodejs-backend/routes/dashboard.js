@@ -9,8 +9,8 @@ router.get('/stats', auth, requireRole(['HR', 'Admin']), async (req, res) => {
     // Helper function to safely execute queries
     const safeQuery = async (query, defaultResult) => {
       try {
-        const [result] = await db.query(query);
-        return result[0] || defaultResult;
+        const { rows } = await db.query(query);
+        return rows[0] || defaultResult;
       } catch (error) {
         console.warn('Query failed (table may not exist):', error.message);
         return defaultResult;

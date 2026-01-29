@@ -10,16 +10,16 @@ router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    const [users] = await db.query(
-      'SELECT * FROM users WHERE username = ?',
+    const result = await db.query(
+      'SELECT * FROM users WHERE username = $1',
       [username]
     );
 
-    if (users.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(401).json({ detail: 'Incorrect username or password' });
     }
 
-    const user = users[0];
+    const user = result.rows[0];
     const isValidPassword = await bcrypt.compare(password, user.password);
 
     if (!isValidPassword) {

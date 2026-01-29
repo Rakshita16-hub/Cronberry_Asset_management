@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2, FileSpreadsheet, Search, Upload, Download } from 'lucide-react';
+import { Plus, Edit, Trash2, FileSpreadsheet, Search, Upload, Download, X } from 'lucide-react';
 
 export default function AssignmentsPage() {
   const [assignments, setAssignments] = useState([]);
@@ -21,6 +21,14 @@ export default function AssignmentsPage() {
   const [searchResults, setSearchResults] = useState([]);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
+  
+  // Filter states
+  const [selectedEmployee, setSelectedEmployee] = useState('all');
+  const [selectedAsset, setSelectedAsset] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [searchFilter, setSearchFilter] = useState('');
+  const [filterEmployees, setFilterEmployees] = useState([]);
+  const [filterAssets, setFilterAssets] = useState([]);
   const [formData, setFormData] = useState({
     employee_id: '',
     asset_id: '',
@@ -50,10 +58,35 @@ export default function AssignmentsPage() {
   const isMobileAsset = selectedAssetCategory.toLowerCase() === 'mobile';
   const hasReturnDate = !!formData.return_date;
 
+  const fetchFilterOptions = async () => {
+    try {
+      const [employeesRes, assetsRes] = await Promise.all([
+        api.get('/assignments/employees'),
+        api.get('/assignments/assets'),
+      ]);
+      setFilterEmployees(employeesRes.data);
+      setFilterAssets(assetsRes.data);
+    } catch (error) {
+      console.error('Failed to fetch filter options:', error);
+    }
+  };
+
   const fetchData = async () => {
     try {
+      setLoading(true);
+      const params = {};
+      if (selectedEmployee && selectedEmployee !== 'all') {
+        params.employee_id = selectedEmployee;
+      }
+      if (selectedAsset && selectedAsset !== 'all') {
+        params.asset_id = selectedAsset;
+      }
+      if (selectedStatus && selectedStatus !== 'all') {
+        params.status = selectedStatus;
+      }
+
       const [assignmentsRes, employeesRes, assetsRes] = await Promise.all([
-        api.get('/assignments'),
+        api.get('/assignments', { params }),
         api.get('/employees'),
         api.get('/assets'),
       ]);
@@ -67,9 +100,24 @@ export default function AssignmentsPage() {
     }
   };
 
+  // Filter assignments based on search query (client-side filtering)
+  const filteredAssignments = assignments.filter((assignment) => {
+    const matchesSearch = searchFilter === '' || 
+      assignment.employee_name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      assignment.asset_name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      assignment.employee_id.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      assignment.asset_id.toLowerCase().includes(searchFilter.toLowerCase());
+    
+    return matchesSearch;
+  });
+
+  useEffect(() => {
+    fetchFilterOptions();
+  }, []);
+
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [selectedEmployee, selectedAsset, selectedStatus]);
 
   const handleOpenDialog = (assignment = null) => {
     if (assignment) {
@@ -296,23 +344,113 @@ export default function AssignmentsPage() {
         </div>
       </div>
 
+      {/* Compact Filters Section */}
+      <div className="bg-white rounded-lg border border-border p-3 mb-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 min-w-[200px] flex-1">
+            <Input
+              id="search-assignments"
+              placeholder="Search by name or asset..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              className="h-9"
+            />
+          </div>
+          <Select
+            value={selectedEmployee || 'all'}
+            onValueChange={(value) => setSelectedEmployee(value === 'all' ? 'all' : value)}
+          >
+            <SelectTrigger id="employee-filter" className="h-9 w-[200px]">
+              <SelectValue placeholder="Employee" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Employees</SelectItem>
+              {filterEmployees.map((emp) => (
+                <SelectItem key={emp.employee_id} value={emp.employee_id}>
+                  {emp.employee_name} ({emp.employee_id})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={selectedAsset || 'all'}
+            onValueChange={(value) => setSelectedAsset(value === 'all' ? 'all' : value)}
+          >
+            <SelectTrigger id="asset-filter" className="h-9 w-[200px]">
+              <SelectValue placeholder="Asset" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Assets</SelectItem>
+              {filterAssets.map((asset) => (
+                <SelectItem key={asset.asset_id} value={asset.asset_id}>
+                  {asset.asset_name} ({asset.asset_id})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={selectedStatus || 'all'}
+            onValueChange={(value) => setSelectedStatus(value === 'all' ? 'all' : value)}
+          >
+            <SelectTrigger id="status-filter" className="h-9 w-[160px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="returned">Returned</SelectItem>
+            </SelectContent>
+          </Select>
+          {(selectedEmployee !== 'all' || selectedAsset !== 'all' || selectedStatus !== 'all' || searchFilter) && (
+            <>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground ml-auto">
+                <span>{filteredAssignments.length} of {assignments.length}</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSelectedEmployee('all');
+                  setSelectedAsset('all');
+                  setSelectedStatus('all');
+                  setSearchFilter('');
+                }}
+                className="h-9 px-3"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Clear
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-muted/50 border-b border-border">
+            <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">ID</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Employee</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Asset</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Assigned Date</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Return Date</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Remarks</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">ID</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Employee</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Asset</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Assigned Date</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Return Date</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Remarks</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
-              {assignments.map((assignment) => (
-                <tr key={assignment.assignment_id} className="hover:bg-muted/50 transition-colors" data-testid={`assignment-row-${assignment.assignment_id}`}>
+            <tbody className="divide-y divide-slate-200">
+              {filteredAssignments.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="px-6 py-8 text-center text-sm text-muted-foreground">
+                    {(selectedEmployee !== 'all' || selectedAsset !== 'all' || selectedStatus !== 'all' || searchFilter) 
+                      ? 'No assignments match the selected filters' 
+                      : 'No assignments found'}
+                  </td>
+                </tr>
+              ) : (
+                filteredAssignments.map((assignment) => (
+                <tr key={assignment.assignment_id} className="hover:bg-slate-50 transition-colors" data-testid={`assignment-row-${assignment.assignment_id}`}>
                   <td className="px-6 py-4 text-sm">{assignment.assignment_id}</td>
                   <td className="px-6 py-4 text-sm">
                     <div className="font-medium">{assignment.employee_name}</div>
@@ -352,7 +490,8 @@ export default function AssignmentsPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </div>

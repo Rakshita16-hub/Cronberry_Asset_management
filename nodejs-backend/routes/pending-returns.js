@@ -7,7 +7,7 @@ const { auth, requireRole } = require('../middleware/auth');
 // Returns data grouped by employee as expected by frontend
 router.get('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
-    const [pendingReturns] = await db.query(
+    const { rows: pendingReturns } = await db.query(
       `SELECT 
         a.assignment_id,
         a.employee_id,
@@ -29,6 +29,7 @@ router.get('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
       FROM assignments a
       LEFT JOIN employees e ON a.employee_id = e.employee_id
       WHERE a.return_date IS NULL 
+        AND e.status = 'Exit'
       ORDER BY a.assigned_date ASC`
     );
 

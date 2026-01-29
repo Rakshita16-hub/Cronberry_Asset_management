@@ -7,10 +7,45 @@ const ExcelJS = require('exceljs');
 // Get all assignments
 router.get('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
-    const [assignments] = await db.query(
-      'SELECT * FROM assignments ORDER BY id DESC'
-    );
-    res.json(assignments);
+    const { employee_id, asset_id, status } = req.query;
+    
+    let query = 'SELECT * FROM assignments';
+    const conditions = [];
+    const params = [];
+    let paramIndex = 1;
+    
+    // Filter by employee_id if provided
+    if (employee_id && employee_id !== '' && employee_id !== 'all' && employee_id !== 'All') {
+      conditions.push(`employee_id = $${paramIndex}`);
+      params.push(employee_id);
+      paramIndex++;
+    }
+    
+    // Filter by asset_id if provided
+    if (asset_id && asset_id !== '' && asset_id !== 'all' && asset_id !== 'All') {
+      conditions.push(`asset_id = $${paramIndex}`);
+      params.push(asset_id);
+      paramIndex++;
+    }
+    
+    // Filter by status: 'active' (return_date IS NULL) or 'returned' (return_date IS NOT NULL)
+    if (status && status !== '' && status !== 'all' && status !== 'All') {
+      if (status.toLowerCase() === 'active') {
+        conditions.push(`return_date IS NULL`);
+      } else if (status.toLowerCase() === 'returned') {
+        conditions.push(`return_date IS NOT NULL`);
+      }
+    }
+    
+    // Add WHERE clause if there are any conditions
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+    
+    query += ' ORDER BY id DESC';
+    
+    const result = await db.query(query, params);
+    res.json(result.rows);
   } catch (error) {
     console.error('Get assignments error:', error);
     res.status(500).json({ detail: 'Failed to fetch assignments' });
@@ -40,52 +75,53 @@ router.post('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
     }
 
     // Fetch employee details
-    const [employees] = await db.query(
-      'SELECT employee_id, full_name FROM employees WHERE employee_id = ?',
+    const employeesResult = await db.query(
+      'SELECT employee_id, full_name FROM employees WHERE employee_id = $1',
       [employee_id]
     );
 
-    if (employees.length === 0) {
+    if (employeesResult.rows.length === 0) {
       return res.status(400).json({ detail: 'Employee not found' });
     }
 
-    const employee = employees[0];
+    const employee = employeesResult.rows[0];
 
     // Fetch asset details
-    const [assets] = await db.query(
-      'SELECT asset_id, asset_name, status FROM assets WHERE asset_id = ?',
+    const assetsResult = await db.query(
+      'SELECT asset_id, asset_name, status FROM assets WHERE asset_id = $1',
       [asset_id]
     );
 
-    if (assets.length === 0) {
+    if (assetsResult.rows.length === 0) {
       return res.status(400).json({ detail: 'Asset not found' });
     }
 
-    const asset = assets[0];
+    const asset = assetsResult.rows[0];
 
     // Check if asset is already assigned
     if (asset.status === 'Assigned') {
       // Check if there's an existing active assignment for this asset
-      const [existingAssignments] = await db.query(
-        'SELECT * FROM assignments WHERE asset_id = ? AND return_date IS NULL',
+      const existingAssignmentsResult = await db.query(
+        'SELECT * FROM assignments WHERE asset_id = $1 AND return_date IS NULL',
         [asset_id]
       );
 
-      if (existingAssignments.length > 0) {
+      if (existingAssignmentsResult.rows.length > 0) {
         return res.status(400).json({ 
           detail: 'Asset is already assigned to another employee',
-          existing_assignment: existingAssignments[0]
+          existing_assignment: existingAssignmentsResult.rows[0]
         });
       }
     }
 
     // Generate assignment_id
-    const [countResult] = await db.query('SELECT COUNT(*) as count FROM assignments');
-    const assignment_id = `ASG${String(countResult[0].count + 1).padStart(4, '0')}`;
+    const countResult = await db.query('SELECT COUNT(*) AS count FROM assignments');
+    const currentCount = Number(countResult.rows[0]?.count) || 0;
+    const assignment_id = `ASG${String(currentCount + 1).padStart(4, '0')}`;
 
     // Create assignment
     await db.query(
-      'INSERT INTO assignments (assignment_id, employee_id, employee_name, asset_id, asset_name, assigned_date, return_date, asset_return_condition, remarks, sim_provider, sim_mobile_number, sim_type, sim_ownership, sim_purpose) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO assignments (assignment_id, employee_id, employee_name, asset_id, asset_name, assigned_date, return_date, asset_return_condition, remarks, sim_provider, sim_mobile_number, sim_type, sim_ownership, sim_purpose) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)',
       [
         assignment_id,
         employee.employee_id,
@@ -111,40 +147,70 @@ router.post('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
     // Update asset status
     if (return_date && return_date !== null) {
       // If return_date is set, asset should be "Available"
-      assetUpdateFields.push('status = ?');
+      assetUpdateFields.push('status = $' + (assetUpdateValues.length + 1));
       assetUpdateValues.push('Available');
     } else {
       // Otherwise, asset should be "Assigned"
-      assetUpdateFields.push('status = ?');
+      assetUpdateFields.push('status = $' + (assetUpdateValues.length + 1));
       assetUpdateValues.push('Assigned');
     }
 
     // Update asset condition_status based on asset_return_condition
     if (asset_return_condition === 'Damaged' || asset_return_condition === 'Needs Repair') {
-      assetUpdateFields.push('condition_status = ?');
+      assetUpdateFields.push('condition_status = $' + (assetUpdateValues.length + 1));
       assetUpdateValues.push('Damaged');
     } else if (asset_return_condition === 'Good') {
-      assetUpdateFields.push('condition_status = ?');
+      assetUpdateFields.push('condition_status = $' + (assetUpdateValues.length + 1));
       assetUpdateValues.push('Good');
     }
 
     // Update asset
     assetUpdateValues.push(asset_id);
     await db.query(
-      `UPDATE assets SET ${assetUpdateFields.join(', ')} WHERE asset_id = ?`,
+      `UPDATE assets SET ${assetUpdateFields.join(', ')} WHERE asset_id = $${assetUpdateValues.length}`,
       assetUpdateValues
     );
 
     // Fetch created assignment
-    const [createdAssignment] = await db.query(
-      'SELECT * FROM assignments WHERE assignment_id = ?',
+    const createdAssignmentResult = await db.query(
+      'SELECT * FROM assignments WHERE assignment_id = $1',
       [assignment_id]
     );
 
-    res.status(201).json(createdAssignment[0]);
+    res.status(201).json(createdAssignmentResult.rows[0]);
   } catch (error) {
     console.error('Create assignment error:', error);
     res.status(500).json({ detail: 'Failed to create assignment', error: error.message });
+  }
+});
+
+// Get unique employee IDs from assignments (for filtering)
+router.get('/employees', auth, requireRole(['HR', 'Admin']), async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT DISTINCT a.employee_id, a.employee_name 
+       FROM assignments a 
+       ORDER BY a.employee_name ASC`
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get assignment employees error:', error);
+    res.status(500).json({ detail: 'Failed to fetch employees' });
+  }
+});
+
+// Get unique asset IDs from assignments (for filtering)
+router.get('/assets', auth, requireRole(['HR', 'Admin']), async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT DISTINCT a.asset_id, a.asset_name 
+       FROM assignments a 
+       ORDER BY a.asset_name ASC`
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get assignment assets error:', error);
+    res.status(500).json({ detail: 'Failed to fetch assets' });
   }
 });
 
@@ -167,41 +233,41 @@ router.put('/:assignment_id', auth, requireRole(['HR', 'Admin']), async (req, re
     } = req.body;
 
     // Fetch current assignment to get asset_id if not provided in request
-    const [currentAssignment] = await db.query(
-      'SELECT asset_id FROM assignments WHERE assignment_id = ?',
+    const currentAssignmentResult = await db.query(
+      'SELECT asset_id FROM assignments WHERE assignment_id = $1',
       [assignment_id]
     );
 
-    if (currentAssignment.length === 0) {
+    if (currentAssignmentResult.rows.length === 0) {
       return res.status(404).json({ detail: 'Assignment not found' });
     }
 
-    const currentAssetId = asset_id || currentAssignment[0].asset_id;
+    const currentAssetId = asset_id || currentAssignmentResult.rows[0].asset_id;
 
     // Fetch employee name if employee_id is provided
     let employee_name = null;
     if (employee_id) {
-      const [employee] = await db.query(
-        'SELECT full_name FROM employees WHERE employee_id = ?',
+      const employeeResult = await db.query(
+        'SELECT full_name FROM employees WHERE employee_id = $1',
         [employee_id]
       );
-      if (employee.length === 0) {
+      if (employeeResult.rows.length === 0) {
         return res.status(400).json({ detail: 'Employee not found' });
       }
-      employee_name = employee[0].full_name;
+      employee_name = employeeResult.rows[0].full_name;
     }
 
     // Fetch asset name if asset_id is provided
     let asset_name = null;
     if (asset_id) {
-      const [asset] = await db.query(
-        'SELECT asset_name FROM assets WHERE asset_id = ?',
+      const assetResult = await db.query(
+        'SELECT asset_name FROM assets WHERE asset_id = $1',
         [asset_id]
       );
-      if (asset.length === 0) {
+      if (assetResult.rows.length === 0) {
         return res.status(400).json({ detail: 'Asset not found' });
       }
-      asset_name = asset[0].asset_name;
+      asset_name = assetResult.rows[0].asset_name;
     }
 
     // Build update query dynamically based on provided fields
@@ -209,55 +275,55 @@ router.put('/:assignment_id', auth, requireRole(['HR', 'Admin']), async (req, re
     const updateValues = [];
 
     if (employee_id) {
-      updateFields.push('employee_id = ?');
+      updateFields.push('employee_id = $' + (updateValues.length + 1));
       updateValues.push(employee_id);
     }
     if (employee_name) {
-      updateFields.push('employee_name = ?');
+      updateFields.push('employee_name = $' + (updateValues.length + 1));
       updateValues.push(employee_name);
     }
     if (asset_id) {
-      updateFields.push('asset_id = ?');
+      updateFields.push('asset_id = $' + (updateValues.length + 1));
       updateValues.push(asset_id);
     }
     if (asset_name) {
-      updateFields.push('asset_name = ?');
+      updateFields.push('asset_name = $' + (updateValues.length + 1));
       updateValues.push(asset_name);
     }
     if (assigned_date !== undefined) {
-      updateFields.push('assigned_date = ?');
+      updateFields.push('assigned_date = $' + (updateValues.length + 1));
       updateValues.push(assigned_date);
     }
     if (return_date !== undefined) {
-      updateFields.push('return_date = ?');
+      updateFields.push('return_date = $' + (updateValues.length + 1));
       updateValues.push(return_date || null);
     }
     if (asset_return_condition !== undefined) {
-      updateFields.push('asset_return_condition = ?');
+      updateFields.push('asset_return_condition = $' + (updateValues.length + 1));
       updateValues.push(asset_return_condition || null);
     }
     if (remarks !== undefined) {
-      updateFields.push('remarks = ?');
+      updateFields.push('remarks = $' + (updateValues.length + 1));
       updateValues.push(remarks || null);
     }
     if (sim_provider !== undefined) {
-      updateFields.push('sim_provider = ?');
+      updateFields.push('sim_provider = $' + (updateValues.length + 1));
       updateValues.push(sim_provider || null);
     }
     if (sim_mobile_number !== undefined) {
-      updateFields.push('sim_mobile_number = ?');
+      updateFields.push('sim_mobile_number = $' + (updateValues.length + 1));
       updateValues.push(sim_mobile_number || null);
     }
     if (sim_type !== undefined) {
-      updateFields.push('sim_type = ?');
+      updateFields.push('sim_type = $' + (updateValues.length + 1));
       updateValues.push(sim_type || null);
     }
     if (sim_ownership !== undefined) {
-      updateFields.push('sim_ownership = ?');
+      updateFields.push('sim_ownership = $' + (updateValues.length + 1));
       updateValues.push(sim_ownership || null);
     }
     if (sim_purpose !== undefined) {
-      updateFields.push('sim_purpose = ?');
+      updateFields.push('sim_purpose = $' + (updateValues.length + 1));
       updateValues.push(sim_purpose || null);
     }
 
@@ -267,12 +333,12 @@ router.put('/:assignment_id', auth, requireRole(['HR', 'Admin']), async (req, re
 
     updateValues.push(assignment_id);
 
-    const [result] = await db.query(
-      `UPDATE assignments SET ${updateFields.join(', ')} WHERE assignment_id = ?`,
+    const result = await db.query(
+      `UPDATE assignments SET ${updateFields.join(', ')} WHERE assignment_id = $${updateValues.length}`,
       updateValues
     );
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ detail: 'Assignment not found' });
     }
 
@@ -282,16 +348,16 @@ router.put('/:assignment_id', auth, requireRole(['HR', 'Admin']), async (req, re
 
     // If return_date is set (not null), set asset status to "Available"
     if (return_date !== undefined && return_date !== null) {
-      assetUpdateFields.push('status = ?');
+      assetUpdateFields.push('status = $' + (assetUpdateValues.length + 1));
       assetUpdateValues.push('Available');
     }
 
     // Update asset condition_status based on asset_return_condition
     if (asset_return_condition === 'Damaged' || asset_return_condition === 'Needs Repair') {
-      assetUpdateFields.push('condition_status = ?');
+      assetUpdateFields.push('condition_status = $' + (assetUpdateValues.length + 1));
       assetUpdateValues.push('Damaged');
     } else if (asset_return_condition === 'Good') {
-      assetUpdateFields.push('condition_status = ?');
+      assetUpdateFields.push('condition_status = $' + (assetUpdateValues.length + 1));
       assetUpdateValues.push('Good');
     }
 
@@ -299,18 +365,18 @@ router.put('/:assignment_id', auth, requireRole(['HR', 'Admin']), async (req, re
     if (assetUpdateFields.length > 0) {
       assetUpdateValues.push(currentAssetId);
       await db.query(
-        `UPDATE assets SET ${assetUpdateFields.join(', ')} WHERE asset_id = ?`,
+        `UPDATE assets SET ${assetUpdateFields.join(', ')} WHERE asset_id = $${assetUpdateValues.length}`,
         assetUpdateValues
       );
     }
 
     // Fetch updated assignment
-    const [updated] = await db.query(
-      'SELECT * FROM assignments WHERE assignment_id = ?',
+    const updatedResult = await db.query(
+      'SELECT * FROM assignments WHERE assignment_id = $1',
       [assignment_id]
     );
 
-    res.json(updated[0]);
+    res.json(updatedResult.rows[0]);
   } catch (error) {
     console.error('Update assignment error:', error);
     res.status(500).json({ detail: 'Failed to update assignment', error: error.message });
@@ -321,9 +387,9 @@ router.put('/:assignment_id', auth, requireRole(['HR', 'Admin']), async (req, re
 router.delete('/:assignment_id', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
     const { assignment_id } = req.params;
-    const [result] = await db.query('DELETE FROM assignments WHERE assignment_id = ?', [assignment_id]);
+    const result = await db.query('DELETE FROM assignments WHERE assignment_id = $1', [assignment_id]);
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ detail: 'Assignment not found' });
     }
 

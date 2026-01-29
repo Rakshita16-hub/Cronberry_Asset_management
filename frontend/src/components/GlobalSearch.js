@@ -72,7 +72,17 @@ export const GlobalSearch = () => {
         </button>
       </form>
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog 
+        open={isOpen} 
+        onOpenChange={(open) => {
+          setIsOpen(open);
+          if (!open) {
+            // Clear search query when modal closes
+            setSearchQuery('');
+            setSearchResults(null);
+          }
+        }}
+      >
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Search Results for "{searchQuery}"</DialogTitle>

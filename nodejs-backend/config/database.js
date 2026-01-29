@@ -1,27 +1,36 @@
-const mysql = require('mysql2/promise');
+const { Pool } = require('pg');
 require('dotenv').config();
 
-const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
+const pool = new Pool({
+  host: process.env.DB_HOST || '3.7.1.231',
+  user: process.env.DB_USER || 'appuser',
+  password: process.env.DB_PASSWORD || 'apppass',
   database: process.env.DB_NAME || 'cronberry_assets',
-  port: process.env.DB_PORT || 3306,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 0
+  port: Number(process.env.DB_PORT) || 5432,
+  ssl: false,
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000
 });
 
+
 // Test database connection
-pool.getConnection()
-  .then(connection => {
-    console.log('✓ MySQL Database connected successfully');
-    connection.release();
+pool
+  .connect()
+  .then(client => {
+    return client
+      .query('SELECT 1')
+      .then(() => {
+        console.log('✓ PostgreSQL Database connected successfully');
+        client.release();
+      })
+      .catch(err => {
+        client.release();
+        throw err;
+      });
   })
   .catch(err => {
-    console.error('✗ MySQL connection error:', err.message);
+    console.error('✗ PostgreSQL connection error:', err.message);
     process.exit(1);
   });
 

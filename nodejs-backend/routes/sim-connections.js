@@ -9,7 +9,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Get all SIM connections
 router.get('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
-    const [sims] = await db.query(
+    const { rows: sims } = await db.query(
       'SELECT * FROM sim_connections ORDER BY id DESC'
     );
     res.json(sims);
@@ -30,17 +30,17 @@ router.post('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
     const { sim_mobile_number, current_owner_name, connection_status, sim_status, remarks } = req.body;
 
     // Check if SIM already exists
-    const [existing] = await db.query(
-      'SELECT * FROM sim_connections WHERE sim_mobile_number = ?',
+    const existing = await db.query(
+      'SELECT * FROM sim_connections WHERE sim_mobile_number = $1',
       [sim_mobile_number]
     );
 
-    if (existing.length > 0) {
+    if (existing.rows.length > 0) {
       return res.status(400).json({ detail: 'SIM Mobile Number already exists' });
     }
 
     await db.query(
-      'INSERT INTO sim_connections (sim_mobile_number, current_owner_name, connection_status, sim_status, remarks) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO sim_connections (sim_mobile_number, current_owner_name, connection_status, sim_status, remarks) VALUES ($1, $2, $3, $4, $5)',
       [sim_mobile_number, current_owner_name, connection_status || 'Active', sim_status || 'In Stock', remarks || null]
     );
 
@@ -63,12 +63,12 @@ router.put('/:sim_mobile_number', auth, requireRole(['HR', 'Admin']), async (req
     const { sim_mobile_number } = req.params;
     const { current_owner_name, connection_status, sim_status, remarks } = req.body;
 
-    const [result] = await db.query(
-      'UPDATE sim_connections SET current_owner_name = ?, connection_status = ?, sim_status = ?, remarks = ? WHERE sim_mobile_number = ?',
+    const result = await db.query(
+      'UPDATE sim_connections SET current_owner_name = $1, connection_status = $2, sim_status = $3, remarks = $4 WHERE sim_mobile_number = $5',
       [current_owner_name, connection_status, sim_status, remarks || null, sim_mobile_number]
     );
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ detail: 'SIM connection not found' });
     }
 
@@ -89,9 +89,9 @@ router.put('/:sim_mobile_number', auth, requireRole(['HR', 'Admin']), async (req
 router.delete('/:sim_mobile_number', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
     const { sim_mobile_number } = req.params;
-    const [result] = await db.query('DELETE FROM sim_connections WHERE sim_mobile_number = ?', [sim_mobile_number]);
+    const result = await db.query('DELETE FROM sim_connections WHERE sim_mobile_number = $1', [sim_mobile_number]);
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ detail: 'SIM connection not found' });
     }
 
@@ -105,7 +105,7 @@ router.delete('/:sim_mobile_number', auth, requireRole(['HR', 'Admin']), async (
 // Export SIM connections
 router.get('/export', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
-    const [sims] = await db.query('SELECT * FROM sim_connections');
+    const { rows: sims } = await db.query('SELECT * FROM sim_connections');
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('SIM Connections');
@@ -192,21 +192,21 @@ router.post('/import', auth, requireRole(['HR', 'Admin']), upload.single('file')
         }
 
         // Check if exists
-        const [existing] = await db.query(
-          'SELECT * FROM sim_connections WHERE sim_mobile_number = ?',
+        const existing = await db.query(
+          'SELECT * FROM sim_connections WHERE sim_mobile_number = $1',
           [simMobileNumber]
         );
 
-        if (existing.length > 0) {
+        if (existing.rows.length > 0) {
           // Update existing
           await db.query(
-            'UPDATE sim_connections SET current_owner_name = ?, connection_status = ?, sim_status = ?, remarks = ? WHERE sim_mobile_number = ?',
+            'UPDATE sim_connections SET current_owner_name = $1, connection_status = $2, sim_status = $3, remarks = $4 WHERE sim_mobile_number = $5',
             [currentOwnerName, connectionStatus, simStatus, remarks, simMobileNumber]
           );
         } else {
           // Insert new
           await db.query(
-            'INSERT INTO sim_connections (sim_mobile_number, current_owner_name, connection_status, sim_status, remarks) VALUES (?, ?, ?, ?, ?)',
+            'INSERT INTO sim_connections (sim_mobile_number, current_owner_name, connection_status, sim_status, remarks) VALUES ($1, $2, $3, $4, $5)',
             [simMobileNumber, currentOwnerName, connectionStatus, simStatus, remarks]
           );
         }

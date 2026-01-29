@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2, Upload, Download, FileSpreadsheet } from 'lucide-react';
+import { Plus, Edit, Trash2, Upload, Download, FileSpreadsheet, X } from 'lucide-react';
 
 export default function AssetsPage() {
   const [assets, setAssets] = useState([]);
@@ -16,6 +16,12 @@ export default function AssetsPage() {
   const [editingAsset, setEditingAsset] = useState(null);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
+  const [filters, setFilters] = useState({
+    asset_name: '',
+    category: '',
+    condition: '',
+    status: '',
+  });
   const [formData, setFormData] = useState({
     asset_name: '',
     category: '',
@@ -28,9 +34,10 @@ export default function AssetsPage() {
     remarks: '',
   });
 
-  const isMobileCategory = formData.category.toLowerCase() === 'mobile';
-  const isLaptopCategory = formData.category.toLowerCase() === 'laptop';
-  const requiresSerialOrIMEI = isMobileCategory || isLaptopCategory;
+  const categoryLower = (formData.category || '').toLowerCase().trim();
+  const isMobileCategory = categoryLower === 'mobile';
+  const isLaptopCategory = categoryLower === 'laptop';
+  const isOtherCategory = !isMobileCategory && !isLaptopCategory && formData.category;
 
   const fetchAssets = async () => {
     try {
@@ -56,6 +63,35 @@ export default function AssetsPage() {
     fetchAssets();
     fetchEmployees();
   }, []);
+
+  // Get unique categories from assets
+  const uniqueCategories = [...new Set(assets.map(asset => asset.category).filter(Boolean))].sort();
+
+  // Filter assets based on filter criteria
+  const filteredAssets = assets.filter((asset) => {
+    const matchesName = filters.asset_name === '' || 
+      asset.asset_name.toLowerCase().includes(filters.asset_name.toLowerCase());
+    const matchesCategory = filters.category === '' || filters.category === 'all' || asset.category === filters.category;
+    const matchesCondition = filters.condition === '' || filters.condition === 'all' || asset.condition === filters.condition;
+    const matchesStatus = filters.status === '' || filters.status === 'all' || asset.status === filters.status;
+    
+    return matchesName && matchesCategory && matchesCondition && matchesStatus;
+  });
+
+  const handleFilterChange = (key, value) => {
+    setFilters({ ...filters, [key]: value });
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      asset_name: '',
+      category: '',
+      condition: '',
+      status: '',
+    });
+  };
+
+  const hasActiveFilters = filters.asset_name || (filters.category && filters.category !== 'all') || (filters.condition && filters.condition !== 'all') || (filters.status && filters.status !== 'all');
 
   const handleOpenDialog = (asset = null) => {
     if (asset) {
@@ -91,14 +127,25 @@ export default function AssetsPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validation - only mandatory for Mobile and Laptop categories
-    if (isMobileCategory && !formData.serial_number) {
-      toast.error('IMEI 1 is required for Mobile category');
-      return;
-    }
-    if (isLaptopCategory && !formData.serial_number) {
-      toast.error('Serial Number is required for Laptop category');
-      return;
+    // Category-based validation
+    const categoryLower = (formData.category || '').toLowerCase().trim();
+    
+    if (categoryLower === 'laptop') {
+      if (!formData.serial_number || formData.serial_number.trim() === '') {
+        toast.error('Serial Number is required for Laptop category');
+        return;
+      }
+    } else if (categoryLower === 'mobile') {
+      if (!formData.serial_number || formData.serial_number.trim() === '') {
+        toast.error('IMEI1 Number is required for Mobile category');
+        return;
+      }
+    } else {
+      // For other categories (Other, electronic item, cable, mouse, etc.), serial_number is required
+      if (!formData.serial_number || formData.serial_number.trim() === '') {
+        toast.error('Serial Number is required for this category');
+        return;
+      }
     }
     
     // Validation - assigned_to is required when status is Assigned
@@ -264,6 +311,81 @@ export default function AssetsPage() {
         </div>
       </div>
 
+      {/* Compact Filters Section */}
+      <div className="bg-white rounded-lg border border-border p-3 mb-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 min-w-[200px] flex-1">
+            <Input
+              id="filter-asset-name"
+              placeholder="Search by name..."
+              value={filters.asset_name}
+              onChange={(e) => handleFilterChange('asset_name', e.target.value)}
+              className="h-9"
+            />
+          </div>
+          <Select
+            value={filters.category || 'all'}
+            onValueChange={(value) => handleFilterChange('category', value === 'all' ? '' : value)}
+          >
+            <SelectTrigger id="filter-category" className="h-9 w-[160px]">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {uniqueCategories.map((category) => (
+                <SelectItem key={category} value={category}>
+                  {category}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={filters.condition || 'all'}
+            onValueChange={(value) => handleFilterChange('condition', value === 'all' ? '' : value)}
+          >
+            <SelectTrigger id="filter-condition" className="h-9 w-[140px]">
+              <SelectValue placeholder="Condition" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Condition</SelectItem>
+              <SelectItem value="New">New</SelectItem>
+              <SelectItem value="Good">Good</SelectItem>
+              <SelectItem value="Damaged">Damaged</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={filters.status || 'all'}
+            onValueChange={(value) => handleFilterChange('status', value === 'all' ? '' : value)}
+          >
+            <SelectTrigger id="filter-status" className="h-9 w-[140px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="Available">Available</SelectItem>
+              <SelectItem value="Assigned">Assigned</SelectItem>
+              <SelectItem value="Under Repair">Under Repair</SelectItem>
+            </SelectContent>
+          </Select>
+          {hasActiveFilters && (
+            <>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground ml-auto">
+                <span>{filteredAssets.length} of {assets.length}</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                className="h-9 px-3"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Clear
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -280,7 +402,14 @@ export default function AssetsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {assets.map((asset) => (
+              {filteredAssets.length === 0 ? (
+                <tr>
+                  <td colSpan="8" className="px-6 py-8 text-center text-sm text-muted-foreground">
+                    {hasActiveFilters ? 'No assets match the selected filters' : 'No assets found'}
+                  </td>
+                </tr>
+              ) : (
+                filteredAssets.map((asset) => (
                 <tr key={asset.asset_id} className="hover:bg-slate-50 transition-colors" data-testid={`asset-row-${asset.asset_id}`}>
                   <td className="px-6 py-4 text-sm">{asset.asset_id}</td>
                   <td className="px-6 py-4 text-sm font-medium">{asset.asset_name}</td>
@@ -333,7 +462,8 @@ export default function AssetsPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -385,9 +515,10 @@ export default function AssetsPage() {
                     <Input
                       id="imei_1"
                       data-testid="asset-imei1-input"
-                      placeholder="Enter IMEI slot 1"
+                      placeholder="Enter IMEI slot 1 (required)"
                       value={formData.serial_number}
                       onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
+                      required
                     />
                   </div>
                   <div className="space-y-2">
@@ -405,15 +536,15 @@ export default function AssetsPage() {
                 <div className="space-y-2">
                   <Label htmlFor="serial_number">
                     Serial Number 
-                    {isLaptopCategory && <span className="text-red-500"> *</span>}
-                    {!isLaptopCategory && <span className="text-slate-400 text-xs ml-1">(optional)</span>}
+                    {(isLaptopCategory || isOtherCategory) && <span className="text-red-500"> *</span>}
                   </Label>
                   <Input
                     id="serial_number"
                     data-testid="asset-serial-input"
-                    placeholder={isLaptopCategory ? "Enter serial number" : "Enter serial number (optional)"}
+                    placeholder={isLaptopCategory || isOtherCategory ? "Enter serial number (required)" : "Enter serial number (optional)"}
                     value={formData.serial_number}
                     onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
+                    required={isLaptopCategory || isOtherCategory}
                   />
                 </div>
               )}
