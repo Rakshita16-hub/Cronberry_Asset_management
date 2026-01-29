@@ -1,9 +1,10 @@
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
-// Load environment variables
-dotenv.config();
+// Load .env from backend directory (works when deployed/started from any cwd)
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 8001;
@@ -142,6 +143,8 @@ app.listen(PORT, () => {
   console.log(`🏥 Health check: http://localhost:${PORT}/health`);
   console.log(`🌐 CORS enabled for origins:`, normalizedOrigins);
   console.log(`📝 CORS_ORIGIN env:`, process.env.CORS_ORIGIN || 'not set');
+  console.log(`🔑 JWT_SECRET:`, process.env.JWT_SECRET ? 'set' : 'NOT SET (login will fail)');
+  console.log(`🗄️  DB_HOST:`, process.env.DB_HOST || 'not set');
   console.log();
 });
 
