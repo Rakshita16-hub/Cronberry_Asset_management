@@ -109,7 +109,11 @@ CREATE INDEX idx_sim_status ON sim_connections (sim_status);
 
 -- Insert default admin user (password: admin123)
 INSERT INTO users (username, password, role) VALUES 
-('admin', '$2a$10$XqN8Y8CqvVZhqKGvEJv0JuZYmF7pV7nXqPLHZZ0KY7BvYZx8.lQ8K', 'HR');
+('admin', '$2a$10$$2a$10$3B9EHdHZt4zyew0XO5bHQu8VX1HmNb.BvlTbqBc7khR8UKdzIArDS.lQ8K', 'Admin');
+
+-- Insert HR user (username: hr@cronberry.com, password: Cron@2026, role: HR)
+INSERT INTO users (username, password, role) VALUES 
+('hr@cronberry.com', '$2a$10$kFxFxQR5tYKSUvT32LJCcugytFHkDw7iKui7pX5eEwuqLdv4XWoNC', 'HR');
 
 -- Sample data for testing
 INSERT INTO employees (employee_id, full_name, department, designation, email, date_of_joining, status) VALUES

@@ -175,15 +175,20 @@ export default function AssetsPage() {
     }
   };
 
-  const handleDelete = async (assetId) => {
+  const handleDelete = async (asset) => {
+    if (asset.status === 'Assigned') {
+      toast.error('Cannot delete asset: it is currently assigned. Unassign or return the asset first.');
+      return;
+    }
     if (!window.confirm('Are you sure you want to delete this asset?')) return;
 
     try {
-      await api.delete(`/assets/${assetId}`);
+      await api.delete(`/assets/${asset.asset_id}`);
       toast.success('Asset deleted successfully');
       fetchAssets();
     } catch (error) {
-      toast.error('Failed to delete asset');
+      const message = error.response?.data?.detail || 'Failed to delete asset';
+      toast.error(message);
     }
   };
 
@@ -455,7 +460,9 @@ export default function AssetsPage() {
                         data-testid={`delete-asset-${asset.asset_id}`}
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDelete(asset.asset_id)}
+                        disabled={asset.status === 'Assigned'}
+                        title={asset.status === 'Assigned' ? 'Cannot delete assigned asset. Unassign or return it first.' : 'Delete asset'}
+                        onClick={() => handleDelete(asset)}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>

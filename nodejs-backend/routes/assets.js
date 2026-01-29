@@ -40,6 +40,95 @@ router.get('/', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   }
 });
 
+// Export assets (must be before /:asset_id route)
+router.get('/export', auth, requireRole(['HR', 'Admin']), async (req, res) => {
+  try {
+    const { rows: assets } = await db.query('SELECT * FROM assets');
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Assets');
+
+    worksheet.columns = [
+      { header: 'Asset ID', key: 'asset_id', width: 15 },
+      { header: 'Asset Name', key: 'asset_name', width: 25 },
+      { header: 'Category', key: 'category', width: 20 },
+      { header: 'Brand', key: 'brand', width: 20 },
+      { header: 'Serial Number / IMEI 1', key: 'serial_number', width: 25 },
+      { header: 'IMEI 2', key: 'imei_2', width: 25 },
+      { header: 'Condition', key: 'condition_status', width: 15 },
+      { header: 'Status', key: 'status', width: 15 }
+    ];
+
+    assets.forEach(asset => worksheet.addRow(asset));
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=assets.xlsx');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Export assets error:', error);
+    res.status(500).json({ detail: 'Failed to export assets' });
+  }
+});
+
+// Download template (must be before /:asset_id route)
+router.get('/template', auth, requireRole(['HR', 'Admin']), async (req, res) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Assets Template');
+
+    worksheet.columns = [
+      { header: 'Asset Name', key: 'asset_name', width: 25 },
+      { header: 'Category', key: 'category', width: 20 },
+      { header: 'Brand', key: 'brand', width: 20 },
+      { header: 'Serial Number', key: 'serial_number', width: 25 },
+      { header: 'IMEI 2', key: 'imei_2', width: 25 },
+      { header: 'Condition', key: 'condition', width: 15 },
+      { header: 'Status', key: 'status', width: 15 },
+      { header: 'Assigned To (Employee Name)', key: 'employee_name', width: 30 },
+      { header: 'Assigned To (Employee Email)', key: 'employee_email', width: 30 },
+      { header: 'Assigned Date', key: 'assigned_date', width: 15 },
+      { header: 'Remarks', key: 'remarks', width: 40 }
+    ];
+
+    worksheet.addRow({
+      asset_name: 'Dell Laptop',
+      category: 'Electronics',
+      brand: 'Dell',
+      serial_number: 'DL123456',
+      imei_2: '',
+      condition: 'New',
+      status: 'Available',
+      employee_name: '',
+      employee_email: '',
+      assigned_date: '',
+      remarks: ''
+    });
+    
+    worksheet.addRow({
+      asset_name: 'iPhone 15',
+      category: 'Mobile',
+      brand: 'Apple',
+      serial_number: '356789012345678',
+      imei_2: '356789012345679',
+      condition: 'New',
+      status: 'Assigned',
+      employee_name: 'Test Employee UI',
+      employee_email: 'test@example.com',
+      assigned_date: '2024-01-20',
+      remarks: ''
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=assets_template.xlsx');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Download template error:', error);
+    res.status(500).json({ detail: 'Failed to download template' });
+  }
+});
+
 // Get single asset by asset_id (for editing)
 router.get('/:asset_id', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
@@ -317,10 +406,22 @@ router.put('/:asset_id', auth, requireRole(['HR', 'Admin']), async (req, res) =>
   }
 });
 
-// Delete asset
+// Delete asset (not allowed if asset is currently assigned)
 router.delete('/:asset_id', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
     const { asset_id } = req.params;
+
+    // Check for active assignment (return_date IS NULL)
+    const assignmentCheck = await db.query(
+      'SELECT 1 FROM assignments WHERE asset_id = $1 AND return_date IS NULL LIMIT 1',
+      [asset_id]
+    );
+    if (assignmentCheck.rows.length > 0) {
+      return res.status(400).json({
+        detail: 'Cannot delete asset: it is currently assigned. Unassign or return the asset first.',
+      });
+    }
+
     const result = await db.query('DELETE FROM assets WHERE asset_id = $1', [asset_id]);
 
     if (result.rowCount === 0) {
@@ -331,95 +432,6 @@ router.delete('/:asset_id', auth, requireRole(['HR', 'Admin']), async (req, res)
   } catch (error) {
     console.error('Delete asset error:', error);
     res.status(500).json({ detail: 'Failed to delete asset' });
-  }
-});
-
-// Export assets
-router.get('/export', auth, requireRole(['HR', 'Admin']), async (req, res) => {
-  try {
-    const { rows: assets } = await db.query('SELECT * FROM assets');
-
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Assets');
-
-    worksheet.columns = [
-      { header: 'Asset ID', key: 'asset_id', width: 15 },
-      { header: 'Asset Name', key: 'asset_name', width: 25 },
-      { header: 'Category', key: 'category', width: 20 },
-      { header: 'Brand', key: 'brand', width: 20 },
-      { header: 'Serial Number / IMEI 1', key: 'serial_number', width: 25 },
-      { header: 'IMEI 2', key: 'imei_2', width: 25 },
-      { header: 'Condition', key: 'condition_status', width: 15 },
-      { header: 'Status', key: 'status', width: 15 }
-    ];
-
-    assets.forEach(asset => worksheet.addRow(asset));
-
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename=assets.xlsx');
-    await workbook.xlsx.write(res);
-    res.end();
-  } catch (error) {
-    console.error('Export assets error:', error);
-    res.status(500).json({ detail: 'Failed to export assets' });
-  }
-});
-
-// Download template
-router.get('/template', auth, requireRole(['HR', 'Admin']), async (req, res) => {
-  try {
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Assets Template');
-
-    worksheet.columns = [
-      { header: 'Asset Name', key: 'asset_name', width: 25 },
-      { header: 'Category', key: 'category', width: 20 },
-      { header: 'Brand', key: 'brand', width: 20 },
-      { header: 'Serial Number', key: 'serial_number', width: 25 },
-      { header: 'IMEI 2', key: 'imei_2', width: 25 },
-      { header: 'Condition', key: 'condition', width: 15 },
-      { header: 'Status', key: 'status', width: 15 },
-      { header: 'Assigned To (Employee Name)', key: 'employee_name', width: 30 },
-      { header: 'Assigned To (Employee Email)', key: 'employee_email', width: 30 },
-      { header: 'Assigned Date', key: 'assigned_date', width: 15 },
-      { header: 'Remarks', key: 'remarks', width: 40 }
-    ];
-
-    worksheet.addRow({
-      asset_name: 'Dell Laptop',
-      category: 'Electronics',
-      brand: 'Dell',
-      serial_number: 'DL123456',
-      imei_2: '',
-      condition: 'New',
-      status: 'Available',
-      employee_name: '',
-      employee_email: '',
-      assigned_date: '',
-      remarks: ''
-    });
-    
-    worksheet.addRow({
-      asset_name: 'iPhone 15',
-      category: 'Mobile',
-      brand: 'Apple',
-      serial_number: '356789012345678',
-      imei_2: '356789012345679',
-      condition: 'New',
-      status: 'Assigned',
-      employee_name: 'Test Employee UI',
-      employee_email: 'test@example.com',
-      assigned_date: '2024-01-20',
-      remarks: ''
-    });
-
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename=assets_template.xlsx');
-    await workbook.xlsx.write(res);
-    res.end();
-  } catch (error) {
-    console.error('Download template error:', error);
-    res.status(500).json({ detail: 'Failed to download template' });
   }
 });
 

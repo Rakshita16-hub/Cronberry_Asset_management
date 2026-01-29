@@ -214,7 +214,7 @@ router.get('/assets', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   }
 });
 
-// Update assignment
+// Update assignment (HR and Admin can edit until asset is returned; returned = view-only)
 router.put('/:assignment_id', auth, requireRole(['HR', 'Admin']), async (req, res) => {
   try {
     const { assignment_id } = req.params;
@@ -232,9 +232,9 @@ router.put('/:assignment_id', auth, requireRole(['HR', 'Admin']), async (req, re
       sim_purpose
     } = req.body;
 
-    // Fetch current assignment to get asset_id if not provided in request
+    // Fetch current assignment to get asset_id and return_date if not provided in request
     const currentAssignmentResult = await db.query(
-      'SELECT asset_id FROM assignments WHERE assignment_id = $1',
+      'SELECT asset_id, return_date FROM assignments WHERE assignment_id = $1',
       [assignment_id]
     );
 
@@ -242,7 +242,15 @@ router.put('/:assignment_id', auth, requireRole(['HR', 'Admin']), async (req, re
       return res.status(404).json({ detail: 'Assignment not found' });
     }
 
+    // Once an assignment has a return date, it cannot be updated (view-only)
+    if (currentAssignmentResult.rows[0].return_date != null) {
+      return res.status(403).json({
+        detail: 'Cannot update a returned assignment. It is view-only.',
+      });
+    }
+
     const currentAssetId = asset_id || currentAssignmentResult.rows[0].asset_id;
+    const currentReturnDate = currentAssignmentResult.rows[0].return_date;
 
     // Fetch employee name if employee_id is provided
     let employee_name = null;
@@ -346,19 +354,40 @@ router.put('/:assignment_id', auth, requireRole(['HR', 'Admin']), async (req, re
     const assetUpdateFields = [];
     const assetUpdateValues = [];
 
-    // If return_date is set (not null), set asset status to "Available"
-    if (return_date !== undefined && return_date !== null) {
-      assetUpdateFields.push('status = $' + (assetUpdateValues.length + 1));
-      assetUpdateValues.push('Available');
+    // Check if return_date is being changed (handle DB date as object or string)
+    if (return_date !== undefined) {
+      const newReturnDate = (return_date === '' || return_date === null) ? null : return_date;
+      const wasReturned = currentReturnDate != null && currentReturnDate !== '';
+      const willBeReturned = newReturnDate != null && newReturnDate !== '';
+
+      // If return_date is being set (asset is being returned)
+      if (!wasReturned && willBeReturned) {
+        assetUpdateFields.push('status = $' + (assetUpdateValues.length + 1));
+        assetUpdateValues.push('Available');
+      }
+      // If return_date is being cleared (asset is being unreturned) - set asset to Assigned so it no longer shows Available
+      else if (wasReturned && !willBeReturned) {
+        const otherAssignmentsResult = await db.query(
+          'SELECT COUNT(*) as count FROM assignments WHERE asset_id = $1 AND assignment_id != $2 AND return_date IS NULL',
+          [currentAssetId, assignment_id]
+        );
+        const hasOtherActiveAssignments = Number(otherAssignmentsResult.rows[0]?.count) > 0;
+        if (!hasOtherActiveAssignments) {
+          assetUpdateFields.push('status = $' + (assetUpdateValues.length + 1));
+          assetUpdateValues.push('Assigned');
+        }
+      }
     }
 
     // Update asset condition_status based on asset_return_condition
-    if (asset_return_condition === 'Damaged' || asset_return_condition === 'Needs Repair') {
-      assetUpdateFields.push('condition_status = $' + (assetUpdateValues.length + 1));
-      assetUpdateValues.push('Damaged');
-    } else if (asset_return_condition === 'Good') {
-      assetUpdateFields.push('condition_status = $' + (assetUpdateValues.length + 1));
-      assetUpdateValues.push('Good');
+    if (asset_return_condition !== undefined) {
+      if (asset_return_condition === 'Damaged' || asset_return_condition === 'Needs Repair') {
+        assetUpdateFields.push('condition_status = $' + (assetUpdateValues.length + 1));
+        assetUpdateValues.push('Damaged');
+      } else if (asset_return_condition === 'Good') {
+        assetUpdateFields.push('condition_status = $' + (assetUpdateValues.length + 1));
+        assetUpdateValues.push('Good');
+      }
     }
 
     // Update asset if there are fields to update

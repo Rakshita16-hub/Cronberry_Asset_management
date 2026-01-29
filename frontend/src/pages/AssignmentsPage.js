@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
+import { getUserRole } from '@/lib/auth';
 import { formatDisplayDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2, FileSpreadsheet, Search, Upload, Download, X } from 'lucide-react';
+import { Plus, Edit, Trash2, FileSpreadsheet, Search, Upload, Download, X, Eye } from 'lucide-react';
 
 export default function AssignmentsPage() {
   const [assignments, setAssignments] = useState([]);
@@ -57,6 +58,15 @@ export default function AssignmentsPage() {
 
   const isMobileAsset = selectedAssetCategory.toLowerCase() === 'mobile';
   const hasReturnDate = !!formData.return_date;
+  const userRole = getUserRole();
+  const isAdmin = userRole === 'Admin';
+  const isHR = userRole === 'HR';
+  const canEditAssignments = isAdmin || isHR; // HR and Admin can edit assignments
+  // Admin can edit returned assignments, HR cannot
+  const isReturnedAssignment = editingAssignment && !!editingAssignment.return_date;
+  const canEditReturnedAssignment = isAdmin; // Only Admin can edit returned assignments
+  const canEditAssignment = canEditAssignments && (!isReturnedAssignment || canEditReturnedAssignment);
+  const isViewOnly = editingAssignment && !canEditAssignment;
 
   const fetchFilterOptions = async () => {
     try {
@@ -160,13 +170,15 @@ export default function AssignmentsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+    // Prevent editing if view-only mode (but allow Admin to edit returned assignments)
+    if (isViewOnly && !canEditReturnedAssignment) return;
+
     // Validation: Asset Return Condition is mandatory if Return Date is filled
     if (formData.return_date && !formData.asset_return_condition) {
       toast.error('Asset Return Condition is required when Return Date is provided');
       return;
     }
-    
+
     try {
       const payload = {
         ...formData,
@@ -472,21 +484,24 @@ export default function AssignmentsPage() {
                   <td className="px-6 py-4 text-sm">
                     <div className="flex gap-2">
                       <Button
-                        data-testid={`edit-assignment-${assignment.assignment_id}`}
+                        data-testid={canEditAssignments && (!assignment.return_date || isAdmin) ? `edit-assignment-${assignment.assignment_id}` : `view-assignment-${assignment.assignment_id}`}
                         variant="ghost"
                         size="sm"
                         onClick={() => handleOpenDialog(assignment)}
+                        title={!canEditAssignments ? 'View only' : (assignment.return_date && !isAdmin) ? 'View (returned assignment - Admin only)' : 'Edit'}
                       >
-                        <Edit className="h-4 w-4" />
+                        {(canEditAssignments && (!assignment.return_date || isAdmin)) ? <Edit className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
-                      <Button
-                        data-testid={`delete-assignment-${assignment.assignment_id}`}
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(assignment.assignment_id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      {canEditAssignments && (!assignment.return_date || isAdmin) && (
+                        <Button
+                          data-testid={`delete-assignment-${assignment.assignment_id}`}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(assignment.assignment_id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -500,7 +515,7 @@ export default function AssignmentsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editingAssignment ? 'Edit Assignment' : 'Assign Asset'}</DialogTitle>
+            <DialogTitle>{isViewOnly ? 'View Assignment' : editingAssignment ? 'Edit Assignment' : 'Assign Asset'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 gap-4 py-4">
@@ -509,9 +524,9 @@ export default function AssignmentsPage() {
                 <Select
                   value={formData.employee_id}
                   onValueChange={(value) => setFormData({ ...formData, employee_id: value })}
-                  disabled={!!editingAssignment}
+                  disabled={!!editingAssignment || isViewOnly}
                 >
-                  <SelectTrigger data-testid="assignment-employee-select">
+                  <SelectTrigger data-testid="assignment-employee-select" disabled={isViewOnly}>
                     <SelectValue placeholder="Select employee" />
                   </SelectTrigger>
                   <SelectContent position="popper" sideOffset={5}>
@@ -528,9 +543,9 @@ export default function AssignmentsPage() {
                 <Select
                   value={formData.asset_id}
                   onValueChange={(value) => setFormData({ ...formData, asset_id: value })}
-                  disabled={!!editingAssignment}
+                  disabled={!!editingAssignment || isViewOnly}
                 >
-                  <SelectTrigger data-testid="assignment-asset-select">
+                  <SelectTrigger data-testid="assignment-asset-select" disabled={isViewOnly}>
                     <SelectValue placeholder="Select asset" />
                   </SelectTrigger>
                   <SelectContent position="popper" sideOffset={5}>
@@ -553,16 +568,20 @@ export default function AssignmentsPage() {
                   value={formData.assigned_date}
                   onChange={(e) => setFormData({ ...formData, assigned_date: e.target.value })}
                   required
+                  disabled={isViewOnly}
+                  readOnly={isViewOnly}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="return_date">Return Date (Optional)</Label>
+                <Label htmlFor="return_date">Return Date</Label>
                 <Input
                   id="return_date"
                   data-testid="assignment-return-date-input"
                   type="date"
                   value={formData.return_date}
                   onChange={(e) => setFormData({ ...formData, return_date: e.target.value })}
+                  disabled={isViewOnly}
+                  readOnly={isViewOnly}
                 />
               </div>
               
@@ -575,8 +594,9 @@ export default function AssignmentsPage() {
                   <Select
                     value={formData.asset_return_condition}
                     onValueChange={(value) => setFormData({ ...formData, asset_return_condition: value })}
+                    disabled={isViewOnly}
                   >
-                    <SelectTrigger data-testid="asset-return-condition-select">
+                    <SelectTrigger data-testid="asset-return-condition-select" disabled={isViewOnly}>
                       <SelectValue placeholder="Select condition" />
                     </SelectTrigger>
                     <SelectContent>
@@ -595,6 +615,8 @@ export default function AssignmentsPage() {
                   data-testid="assignment-remarks-input"
                   value={formData.remarks}
                   onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+                  disabled={isViewOnly}
+                  readOnly={isViewOnly}
                 />
               </div>
               
@@ -610,8 +632,9 @@ export default function AssignmentsPage() {
                     <Select
                       value={formData.sim_provider}
                       onValueChange={(value) => setFormData({ ...formData, sim_provider: value })}
+                      disabled={isViewOnly}
                     >
-                      <SelectTrigger data-testid="sim-provider-select">
+                      <SelectTrigger data-testid="sim-provider-select" disabled={isViewOnly}>
                         <SelectValue placeholder="Select provider" />
                       </SelectTrigger>
                       <SelectContent>
@@ -632,6 +655,8 @@ export default function AssignmentsPage() {
                       placeholder="Enter mobile number"
                       value={formData.sim_mobile_number}
                       onChange={(e) => setFormData({ ...formData, sim_mobile_number: e.target.value })}
+                      disabled={isViewOnly}
+                      readOnly={isViewOnly}
                     />
                   </div>
                   
@@ -640,8 +665,9 @@ export default function AssignmentsPage() {
                     <Select
                       value={formData.sim_type}
                       onValueChange={(value) => setFormData({ ...formData, sim_type: value })}
+                      disabled={isViewOnly}
                     >
-                      <SelectTrigger data-testid="sim-type-select">
+                      <SelectTrigger data-testid="sim-type-select" disabled={isViewOnly}>
                         <SelectValue placeholder="Select SIM type" />
                       </SelectTrigger>
                       <SelectContent>
@@ -657,8 +683,9 @@ export default function AssignmentsPage() {
                     <Select
                       value={formData.sim_ownership}
                       onValueChange={(value) => setFormData({ ...formData, sim_ownership: value })}
+                      disabled={isViewOnly}
                     >
-                      <SelectTrigger data-testid="sim-ownership-select">
+                      <SelectTrigger data-testid="sim-ownership-select" disabled={isViewOnly}>
                         <SelectValue placeholder="Select ownership" />
                       </SelectTrigger>
                       <SelectContent>
@@ -676,15 +703,23 @@ export default function AssignmentsPage() {
                       placeholder="Enter purpose or remarks"
                       value={formData.sim_purpose}
                       onChange={(e) => setFormData({ ...formData, sim_purpose: e.target.value })}
+                      disabled={isViewOnly}
+                      readOnly={isViewOnly}
                     />
                   </div>
                 </>
               )}
             </div>
             <DialogFooter>
-              <Button data-testid="assignment-form-submit" type="submit">
-                {editingAssignment ? 'Update' : 'Create'} Assignment
-              </Button>
+              {isViewOnly ? (
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                  Close
+                </Button>
+              ) : (
+                <Button data-testid="assignment-form-submit" type="submit">
+                  {editingAssignment ? 'Update' : 'Create'} Assignment
+                </Button>
+              )}
             </DialogFooter>
           </form>
         </DialogContent>
