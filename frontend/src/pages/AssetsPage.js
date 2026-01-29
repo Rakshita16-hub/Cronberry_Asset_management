@@ -242,13 +242,67 @@ export default function AssetsPage() {
           'Content-Type': 'multipart/form-data',
         },
       });
-      toast.success(response.data.message);
-      if (response.data.errors && response.data.errors.length > 0) {
-        toast.warning(`Some rows had errors: ${response.data.errors.length} errors`);
+      
+      // Check if there are errors in the response
+      if (response.data.success === false || (response.data.errors && response.data.errors.length > 0)) {
+        // Show summary
+        toast.error(response.data.summary || response.data.message || 'Import failed');
+        
+        // Show detailed errors
+        if (response.data.errors && response.data.errors.length > 0) {
+          // Show first few errors in toast, then all errors in console
+          const errorMessages = response.data.errors.slice(0, 3).join('\n');
+          const remainingErrors = response.data.errors.length - 3;
+          
+          if (remainingErrors > 0) {
+            toast.error(`${errorMessages}\n... and ${remainingErrors} more error(s). Check console for full details.`, {
+              duration: 10000,
+            });
+          } else {
+            toast.error(errorMessages, {
+              duration: 10000,
+            });
+          }
+          
+          // Log all errors to console for debugging
+          console.error('Import Errors:', response.data.errors);
+        }
+      } else {
+        // Success case
+        toast.success(response.data.message || response.data.summary || 'Assets imported successfully');
       }
+      
       fetchAssets();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to import assets');
+      // Handle error response
+      const errorData = error.response?.data;
+      
+      if (errorData) {
+        // Show summary or message
+        const errorMessage = errorData.summary || errorData.message || errorData.detail || 'Failed to import assets';
+        toast.error(errorMessage);
+        
+        // Show detailed errors if available
+        if (errorData.errors && errorData.errors.length > 0) {
+          const errorMessages = errorData.errors.slice(0, 3).join('\n');
+          const remainingErrors = errorData.errors.length - 3;
+          
+          if (remainingErrors > 0) {
+            toast.error(`${errorMessages}\n... and ${remainingErrors} more error(s). Check console for full details.`, {
+              duration: 10000,
+            });
+          } else {
+            toast.error(errorMessages, {
+              duration: 10000,
+            });
+          }
+          
+          // Log all errors to console
+          console.error('Import Errors:', errorData.errors);
+        }
+      } else {
+        toast.error(error.message || 'Failed to import assets');
+      }
     } finally {
       setImporting(false);
       if (fileInputRef.current) {

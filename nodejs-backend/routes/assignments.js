@@ -242,15 +242,19 @@ router.put('/:assignment_id', auth, requireRole(['HR', 'Admin']), async (req, re
       return res.status(404).json({ detail: 'Assignment not found' });
     }
 
-    // Once an assignment has a return date, it cannot be updated (view-only)
-    if (currentAssignmentResult.rows[0].return_date != null) {
+    const currentAssetId = asset_id || currentAssignmentResult.rows[0].asset_id;
+    const currentReturnDate = currentAssignmentResult.rows[0].return_date;
+    const isReturned = currentAssignmentResult.rows[0].return_date != null;
+    const isAdmin = req.user.role === 'Admin';
+
+    // If assignment has been returned, restrict editing based on user role
+    if (isReturned && !isAdmin) {
+      // HR users cannot edit returned assignments (view-only)
+      // Admin users can edit all fields even for returned assignments
       return res.status(403).json({
         detail: 'Cannot update a returned assignment. It is view-only.',
       });
     }
-
-    const currentAssetId = asset_id || currentAssignmentResult.rows[0].asset_id;
-    const currentReturnDate = currentAssignmentResult.rows[0].return_date;
 
     // Fetch employee name if employee_id is provided
     let employee_name = null;
@@ -360,22 +364,34 @@ router.put('/:assignment_id', auth, requireRole(['HR', 'Admin']), async (req, re
       const wasReturned = currentReturnDate != null && currentReturnDate !== '';
       const willBeReturned = newReturnDate != null && newReturnDate !== '';
 
-      // If return_date is being set (asset is being returned)
-      if (!wasReturned && willBeReturned) {
-        assetUpdateFields.push('status = $' + (assetUpdateValues.length + 1));
-        assetUpdateValues.push('Available');
-      }
-      // If return_date is being cleared (asset is being unreturned) - set asset to Assigned so it no longer shows Available
-      else if (wasReturned && !willBeReturned) {
-        const otherAssignmentsResult = await db.query(
-          'SELECT COUNT(*) as count FROM assignments WHERE asset_id = $1 AND assignment_id != $2 AND return_date IS NULL',
-          [currentAssetId, assignment_id]
-        );
-        const hasOtherActiveAssignments = Number(otherAssignmentsResult.rows[0]?.count) > 0;
+      // Check for other active assignments (this will be used for both setting and clearing return_date)
+      const otherAssignmentsResult = await db.query(
+        'SELECT COUNT(*) as count FROM assignments WHERE asset_id = $1 AND assignment_id != $2 AND return_date IS NULL',
+        [currentAssetId, assignment_id]
+      );
+      const hasOtherActiveAssignments = Number(otherAssignmentsResult.rows[0]?.count) > 0;
+
+      // If return_date is being set or changed to a non-null value (asset is being returned or return date is being updated)
+      if (willBeReturned) {
+        // Only set asset to "Available" if there are no other active assignments
+        // If there are other active assignments, asset should remain "Assigned"
         if (!hasOtherActiveAssignments) {
           assetUpdateFields.push('status = $' + (assetUpdateValues.length + 1));
-          assetUpdateValues.push('Assigned');
+          assetUpdateValues.push('Available');
         }
+      }
+      // If return_date is being cleared (changed to null) - check if asset is assigned to another user
+      else if (wasReturned && !willBeReturned) {
+        // If asset is already assigned to another user, prevent the return date update
+        if (hasOtherActiveAssignments) {
+          return res.status(400).json({
+            detail: 'Cannot remove return date: This asset is already assigned to another user. Please return the asset from the current assignment first.'
+          });
+        }
+        
+        // If asset is not assigned to another user, allow the update and set asset to Assigned
+        assetUpdateFields.push('status = $' + (assetUpdateValues.length + 1));
+        assetUpdateValues.push('Assigned');
       }
     }
 

@@ -82,6 +82,7 @@ router.get('/template', auth, requireRole(['HR', 'Admin']), async (req, res) => 
       { header: 'Category', key: 'category', width: 20 },
       { header: 'Brand', key: 'brand', width: 20 },
       { header: 'Serial Number', key: 'serial_number', width: 25 },
+      { header: 'IMEI 1', key: 'imei_1', width: 25 },
       { header: 'IMEI 2', key: 'imei_2', width: 25 },
       { header: 'Condition', key: 'condition', width: 15 },
       { header: 'Status', key: 'status', width: 15 },
@@ -96,6 +97,7 @@ router.get('/template', auth, requireRole(['HR', 'Admin']), async (req, res) => 
       category: 'Electronics',
       brand: 'Dell',
       serial_number: 'DL123456',
+      imei_1: '',
       imei_2: '',
       condition: 'New',
       status: 'Available',
@@ -109,7 +111,8 @@ router.get('/template', auth, requireRole(['HR', 'Admin']), async (req, res) => 
       asset_name: 'iPhone 15',
       category: 'Mobile',
       brand: 'Apple',
-      serial_number: '356789012345678',
+      serial_number: '',
+      imei_1: '356789012345678',
       imei_2: '356789012345679',
       condition: 'New',
       status: 'Assigned',
@@ -312,6 +315,39 @@ router.put('/:asset_id', auth, requireRole(['HR', 'Admin']), async (req, res) =>
     const { asset_id } = req.params;
     const { asset_name, category, brand, serial_number, imei_2, condition, status, remarks } = req.body;
 
+    // First, check if asset is currently assigned to an employee
+    const currentAssetResult = await db.query(
+      'SELECT status, condition_status FROM assets WHERE asset_id = $1',
+      [asset_id]
+    );
+
+    if (currentAssetResult.rows.length === 0) {
+      return res.status(404).json({ detail: 'Asset not found' });
+    }
+
+    const currentAsset = currentAssetResult.rows[0];
+    const isCurrentlyAssigned = currentAsset.status === 'Assigned';
+
+    // Check if there's an active assignment (return_date IS NULL)
+    if (isCurrentlyAssigned) {
+      const activeAssignmentResult = await db.query(
+        'SELECT 1 FROM assignments WHERE asset_id = $1 AND return_date IS NULL LIMIT 1',
+        [asset_id]
+      );
+
+      if (activeAssignmentResult.rows.length > 0) {
+        // Asset is assigned - check if user is trying to change status or condition
+        const isChangingStatus = status !== undefined && status !== currentAsset.status;
+        const isChangingCondition = condition !== undefined && condition !== currentAsset.condition_status;
+
+        if (isChangingStatus || isChangingCondition) {
+          return res.status(400).json({
+            detail: 'This asset is currently assigned to an employee. To update its status or condition, please navigate to the Asset Assignments section.'
+          });
+        }
+      }
+    }
+
     // Category-based validation
     const categoryLower = (category || '').toLowerCase().trim();
     
@@ -439,12 +475,46 @@ router.delete('/:asset_id', auth, requireRole(['HR', 'Admin']), async (req, res)
 router.post('/import', auth, requireRole(['HR', 'Admin']), upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ detail: 'No file uploaded' });
+      return res.status(400).json({ 
+        success: false,
+        summary: 'No file uploaded',
+        message: 'Please select a file to import.',
+        imported: 0,
+        errorCount: 1,
+        errors: ['No file uploaded'],
+        errorDetails: [{ row: 0, message: 'No file uploaded' }]
+      });
     }
 
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(req.file.buffer);
-    const worksheet = workbook.worksheets[0];
+    let workbook;
+    let worksheet;
+    try {
+      workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(req.file.buffer);
+      worksheet = workbook.worksheets[0];
+      
+      if (!worksheet || worksheet.rowCount < 2) {
+        return res.status(400).json({
+          success: false,
+          summary: 'Invalid file format',
+          message: 'The uploaded file appears to be empty or invalid. Please ensure it contains data rows.',
+          imported: 0,
+          errorCount: 1,
+          errors: ['File is empty or invalid format'],
+          errorDetails: [{ row: 0, message: 'File is empty or invalid format' }]
+        });
+      }
+    } catch (fileError) {
+      return res.status(400).json({
+        success: false,
+        summary: 'Invalid file format',
+        message: `Failed to read the Excel file: ${fileError.message}. Please ensure you are uploading a valid Excel (.xlsx) file.`,
+        imported: 0,
+        errorCount: 1,
+        errors: [`File parsing error: ${fileError.message}`],
+        errorDetails: [{ row: 0, message: `File parsing error: ${fileError.message}` }]
+      });
+    }
 
     let imported = 0;
     const errors = [];
@@ -457,60 +527,153 @@ router.post('/import', auth, requireRole(['HR', 'Admin']), upload.single('file')
         const row = worksheet.getRow(i);
         
         try {
-          const assetName = row.getCell(1).value;
-          const category = row.getCell(2).value;
-          const brand = row.getCell(3).value;
+          // Get cell values with proper handling
+          const assetName = row.getCell(1).value ? String(row.getCell(1).value).trim() : null;
+          const category = row.getCell(2).value ? String(row.getCell(2).value).trim() : null;
+          const brand = row.getCell(3).value ? String(row.getCell(3).value).trim() : null;
           const serialNumber = (row.getCell(4).value && String(row.getCell(4).value).trim()) || null;
-          const imei2 = (row.getCell(5).value && String(row.getCell(5).value).trim()) || null;
-          const condition = row.getCell(6).value || 'New';
-          const status = row.getCell(7).value || 'Available';
-          const employeeName = (row.getCell(8).value && String(row.getCell(8).value).trim()) || null;
-          const employeeEmail = (row.getCell(9).value && String(row.getCell(9).value).trim()) || null;
-          const assignedDate = row.getCell(10).value || new Date().toISOString().split('T')[0];
-          const remarks = (row.getCell(11).value && String(row.getCell(11).value).trim()) || null;
+          const imei1 = (row.getCell(5).value && String(row.getCell(5).value).trim()) || null;
+          const imei2 = (row.getCell(6).value && String(row.getCell(6).value).trim()) || null;
+          const condition = (row.getCell(7).value && String(row.getCell(7).value).trim()) || 'New';
+          const status = (row.getCell(8).value && String(row.getCell(8).value).trim()) || 'Available';
+          const employeeName = (row.getCell(9).value && String(row.getCell(9).value).trim()) || null;
+          const employeeEmail = (row.getCell(10).value && String(row.getCell(10).value).trim()) || null;
+          
+          // Handle Excel date objects (ExcelJS returns dates as numbers or Date objects)
+          let assignedDateRaw = row.getCell(11).value;
+          let assignedDate = new Date().toISOString().split('T')[0]; // Default to today
+          if (assignedDateRaw) {
+            if (typeof assignedDateRaw === 'number') {
+              // Excel date serial number - convert to date string
+              const excelEpoch = new Date(1899, 11, 30);
+              const dateObj = new Date(excelEpoch.getTime() + assignedDateRaw * 86400000);
+              assignedDate = dateObj.toISOString().split('T')[0];
+            } else if (assignedDateRaw instanceof Date) {
+              assignedDate = assignedDateRaw.toISOString().split('T')[0];
+            } else {
+              assignedDate = String(assignedDateRaw).trim();
+            }
+          }
+          
+          const remarks = (row.getCell(12).value && String(row.getCell(12).value).trim()) || null;
+
+          // Skip completely empty rows
+          if (!assetName && !category && !brand && !serialNumber && !imei1 && !imei2) {
+            continue;
+          }
+
+          // Validate required fields
+          if (!assetName || assetName === '') {
+            errors.push(`Row ${i}: Asset Name is required.`);
+            continue;
+          }
+
+          if (!category || category === '') {
+            errors.push(`Row ${i}: Category is required.`);
+            continue;
+          }
+
+          if (!brand || brand === '') {
+            errors.push(`Row ${i}: Brand is required.`);
+            continue;
+          }
+
+          // Validate status values
+          const validStatuses = ['Available', 'Assigned', 'Under Maintenance', 'Retired'];
+          if (status && !validStatuses.includes(status)) {
+            errors.push(`Row ${i}: Invalid Status "${status}". Valid values are: ${validStatuses.join(', ')}.`);
+            continue;
+          }
+
+          // Validate condition values
+          const validConditions = ['New', 'Good', 'Fair', 'Poor', 'Damaged'];
+          if (condition && !validConditions.includes(condition)) {
+            errors.push(`Row ${i}: Invalid Condition "${condition}". Valid values are: ${validConditions.join(', ')}.`);
+            continue;
+          }
+
+          // Validate assigned date format (if provided)
+          if (assignedDate && assignedDate !== '') {
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+            if (!dateRegex.test(assignedDate)) {
+              errors.push(`Row ${i}: Invalid Assigned Date format "${assignedDate}". Please use YYYY-MM-DD format (e.g., 2024-01-20).`);
+              continue;
+            }
+            // Validate date is valid
+            const dateObj = new Date(assignedDate);
+            if (isNaN(dateObj.getTime())) {
+              errors.push(`Row ${i}: Invalid Assigned Date "${assignedDate}". Please provide a valid date.`);
+              continue;
+            }
+          }
 
           // Category-based validation
           const categoryLower = (category || '').toLowerCase().trim();
           
+          // For mobile category, determine which IMEI to use for serial_number
+          let finalSerialNumber = serialNumber;
+          if (categoryLower === 'mobile') {
+            // For mobile, prioritize IMEI 1, then Serial Number, then IMEI 2
+            if (imei1 && imei1.trim() !== '') {
+              finalSerialNumber = imei1;
+            } else if (serialNumber && serialNumber.trim() !== '') {
+              finalSerialNumber = serialNumber;
+            } else if (imei2 && imei2.trim() !== '') {
+              finalSerialNumber = imei2;
+            }
+          }
+          
           if (categoryLower === 'laptop') {
-            if (!serialNumber || serialNumber.trim() === '') {
+            if (!finalSerialNumber || finalSerialNumber.trim() === '') {
               errors.push(`Row ${i}: Serial Number is required for Laptop category.`);
               continue;
             }
           } else if (categoryLower === 'mobile') {
-            // For mobile category, either IMEI1 (serialNumber) or IMEI2 (imei2) is required
-            if ((!serialNumber || serialNumber.trim() === '') && (!imei2 || imei2.trim() === '')) {
-              errors.push(`Row ${i}: Either IMEI1 Number (Serial Number) or IMEI2 Number is required for Mobile category.`);
+            // For mobile category, either Serial Number, IMEI 1, or IMEI 2 is required
+            if (!finalSerialNumber || finalSerialNumber.trim() === '') {
+              errors.push(`Row ${i}: Either Serial Number, IMEI 1, or IMEI 2 is required for Mobile category.`);
               continue;
             }
           } else {
             // For other categories (Other, electronic item, cable, mouse, etc.), serial_number is required
-            if (!serialNumber || serialNumber.trim() === '') {
+            if (!finalSerialNumber || finalSerialNumber.trim() === '') {
               errors.push(`Row ${i}: Serial Number is required for this category.`);
               continue;
             }
           }
 
           // Check for duplicate serial_number (if provided)
-          if (serialNumber && serialNumber.trim() !== '') {
+          if (finalSerialNumber && finalSerialNumber.trim() !== '') {
             const { rows: existingSerial } = await client.query(
               'SELECT asset_id FROM assets WHERE serial_number = $1',
-              [serialNumber.trim()]
+              [finalSerialNumber.trim()]
             );
             if (existingSerial.length > 0) {
-              errors.push(`Row ${i}: Serial Number "${serialNumber}" already exists. Please use a unique serial number.`);
+              errors.push(`Row ${i}: Serial Number/IMEI 1 "${finalSerialNumber}" already exists. Please use a unique serial number/IMEI.`);
+              continue;
+            }
+          }
+
+          // Check for duplicate imei_1 (if provided separately and different from serial_number)
+          if (imei1 && imei1.trim() !== '' && imei1.trim() !== finalSerialNumber?.trim()) {
+            const { rows: existingIMEI1 } = await client.query(
+              'SELECT asset_id FROM assets WHERE serial_number = $1 OR imei_2 = $1',
+              [imei1.trim()]
+            );
+            if (existingIMEI1.length > 0) {
+              errors.push(`Row ${i}: IMEI 1 "${imei1}" already exists. Please use a unique IMEI number.`);
               continue;
             }
           }
 
           // Check for duplicate imei_2 (if provided)
           if (imei2 && imei2.trim() !== '') {
-            const { rows: existingIMEI } = await client.query(
-              'SELECT asset_id FROM assets WHERE imei_2 = $1',
+            const { rows: existingIMEI2 } = await client.query(
+              'SELECT asset_id FROM assets WHERE serial_number = $1 OR imei_2 = $1',
               [imei2.trim()]
             );
-            if (existingIMEI.length > 0) {
-              errors.push(`Row ${i}: IMEI Number "${imei2}" already exists. Please use a unique IMEI number.`);
+            if (existingIMEI2.length > 0) {
+              errors.push(`Row ${i}: IMEI 2 "${imei2}" already exists. Please use a unique IMEI number.`);
               continue;
             }
           }
@@ -555,7 +718,12 @@ router.post('/import', auth, requireRole(['HR', 'Admin']), upload.single('file')
             }
 
             if (employees.length === 0) {
-              errors.push(`Row ${i}: Employee not found. Please provide a valid Employee Name or Email.`);
+              const employeeInfo = employeeName && employeeEmail 
+                ? `Name: "${employeeName}", Email: "${employeeEmail}"`
+                : employeeName 
+                  ? `Name: "${employeeName}"`
+                  : `Email: "${employeeEmail}"`;
+              errors.push(`Row ${i}: Employee not found with ${employeeInfo}. Please verify the Employee Name or Email exists in the system.`);
               continue;
             }
 
@@ -568,7 +736,7 @@ router.post('/import', auth, requireRole(['HR', 'Admin']), upload.single('file')
 
             await client.query(
               'INSERT INTO assets (asset_id, asset_name, category, brand, serial_number, imei_2, condition_status, status, remarks) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
-              [assetId, assetName, category, brand, serialNumber, imei2, condition, status, remarks]
+              [assetId, assetName, category, brand, finalSerialNumber, imei2, condition, status, remarks]
             );
 
             // Auto-create assignment
@@ -590,32 +758,98 @@ router.post('/import', auth, requireRole(['HR', 'Admin']), upload.single('file')
 
             await client.query(
               'INSERT INTO assets (asset_id, asset_name, category, brand, serial_number, imei_2, condition_status, status, remarks) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
-              [assetId, assetName, category, brand, serialNumber, imei2, condition, status, remarks]
+              [assetId, assetName, category, brand, finalSerialNumber, imei2, condition, status, remarks]
             );
 
             imported++;
           }
         } catch (error) {
-          errors.push(`Row ${i}: ${error.message}`);
+          console.error(`Error processing row ${i}:`, error);
+          const errorMessage = error.message || 'Unknown error occurred';
+          errors.push(`Row ${i}: Unexpected error - ${errorMessage}. Please check the data format and try again.`);
         }
       }
 
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
-      throw error;
+      console.error('Transaction error:', error);
+      
+      // If we have validation errors, include them along with the database error
+      if (errors.length > 0) {
+        errors.push(`Database error: ${error.message}`);
+      } else {
+        // If no validation errors, throw to be caught by outer catch
+        throw error;
+      }
     } finally {
       client.release();
     }
 
-    res.json({
-      message: `Successfully imported ${imported} assets`,
-      imported,
-      errors
+    // Build user-friendly response with error details
+    let message = '';
+    let statusCode = 200;
+    let summary = '';
+    
+    if (errors.length > 0 && imported === 0) {
+      statusCode = 400;
+      summary = `Import failed. ${errors.length} error(s) found. No assets were imported.`;
+      message = `Please fix the following errors and try again:\n\n${errors.map((err, idx) => `${idx + 1}. ${err}`).join('\n')}`;
+    } else if (errors.length > 0 && imported > 0) {
+      statusCode = 207; // Multi-Status (partial success)
+      summary = `Partially imported. ${imported} asset(s) imported successfully, but ${errors.length} row(s) had errors.`;
+      message = `The following rows had errors:\n\n${errors.map((err, idx) => `${idx + 1}. ${err}`).join('\n')}`;
+    } else {
+      summary = `Successfully imported ${imported} asset(s).`;
+      message = `All assets were imported successfully.`;
+    }
+
+    res.status(statusCode).json({
+      success: errors.length === 0,
+      message: message,
+      summary: summary,
+      imported: imported,
+      errorCount: errors.length,
+      errors: errors.length > 0 ? errors : [],
+      // Formatted errors for easy display (each error is a separate string)
+      errorDetails: errors.length > 0 ? errors.map((err, idx) => ({
+        row: idx + 1,
+        message: err
+      })) : []
     });
   } catch (error) {
     console.error('Import assets error:', error);
-    res.status(500).json({ detail: 'Failed to import assets' });
+    
+    // Determine if this is a database error or other system error
+    let errorMessage = error.message || 'Unknown error occurred';
+    let userFriendlyMessage = 'An unexpected error occurred while importing assets.';
+    
+    // Provide more specific error messages for common issues
+    if (error.message && error.message.includes('duplicate key')) {
+      userFriendlyMessage = 'A duplicate entry was found. Please check for duplicate Serial Numbers or IMEI numbers.';
+      errorMessage = 'Duplicate entry detected in database';
+    } else if (error.message && error.message.includes('violates foreign key')) {
+      userFriendlyMessage = 'Invalid reference found. Please check that all employee references are valid.';
+      errorMessage = 'Invalid foreign key reference';
+    } else if (error.message && error.message.includes('null value')) {
+      userFriendlyMessage = 'Required fields are missing. Please ensure all required fields are filled.';
+      errorMessage = 'Missing required fields';
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      summary: 'Import failed',
+      message: userFriendlyMessage,
+      detail: errorMessage,
+      imported: 0,
+      errorCount: 1,
+      errors: [errorMessage],
+      errorDetails: [{
+        row: 0,
+        message: errorMessage
+      }],
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
