@@ -110,14 +110,16 @@ export default function AssignmentsPage() {
     }
   };
 
-  // Filter assignments based on search query (client-side filtering)
+  // Filter assignments based on search query (client-side filtering); include brand from assets
+  const getAssetBrand = (assetId) => assets.find((a) => a.asset_id === assetId)?.brand || '';
   const filteredAssignments = assignments.filter((assignment) => {
-    const matchesSearch = searchFilter === '' || 
+    const brand = getAssetBrand(assignment.asset_id);
+    const matchesSearch = searchFilter === '' ||
       assignment.employee_name.toLowerCase().includes(searchFilter.toLowerCase()) ||
       assignment.asset_name.toLowerCase().includes(searchFilter.toLowerCase()) ||
       assignment.employee_id.toLowerCase().includes(searchFilter.toLowerCase()) ||
-      assignment.asset_id.toLowerCase().includes(searchFilter.toLowerCase());
-    
+      assignment.asset_id.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      (brand && brand.toLowerCase().includes(searchFilter.toLowerCase()));
     return matchesSearch;
   });
 
@@ -393,11 +395,14 @@ export default function AssignmentsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Assets</SelectItem>
-              {filterAssets.map((asset) => (
-                <SelectItem key={asset.asset_id} value={asset.asset_id}>
-                  {asset.asset_name} ({asset.asset_id})
-                </SelectItem>
-              ))}
+              {filterAssets.map((asset) => {
+                const brand = assets.find((a) => a.asset_id === asset.asset_id)?.brand || asset.brand;
+                return (
+                  <SelectItem key={asset.asset_id} value={asset.asset_id}>
+                    {asset.asset_name}{brand ? ` (${brand})` : ''} - {asset.asset_id}
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
           <Select
@@ -470,7 +475,13 @@ export default function AssignmentsPage() {
                   </td>
                   <td className="px-6 py-4 text-sm">
                     <div className="font-medium">{assignment.asset_name}</div>
-                    <div className="text-muted-foreground text-xs">{assignment.asset_id}</div>
+                    <div className="text-muted-foreground text-xs">
+                      {assignment.asset_id}
+                      {(() => {
+                        const brand = assets.find((a) => a.asset_id === assignment.asset_id)?.brand;
+                        return brand ? ` • ${brand}` : '';
+                      })()}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-sm">{formatDisplayDate(assignment.assigned_date)}</td>
                   <td className="px-6 py-4 text-sm">
@@ -553,7 +564,7 @@ export default function AssignmentsPage() {
                       .filter((asset) => asset.status === 'Available' || asset.asset_id === formData.asset_id)
                       .map((asset) => (
                         <SelectItem key={asset.asset_id} value={asset.asset_id}>
-                          {asset.asset_name} ({asset.asset_id}) - {asset.status}
+                          {asset.asset_name}{asset.brand ? ` (${asset.brand})` : ''} - {asset.asset_id} - {asset.status}
                         </SelectItem>
                       ))}
                   </SelectContent>
@@ -762,7 +773,7 @@ export default function AssignmentsPage() {
                         <div className="space-y-2">
                           {employee.assigned_assets.map((asset) => (
                             <div key={asset.assignment_id} className="bg-muted/30 rounded p-2 text-sm">
-                              <p className="font-medium">{asset.asset_name}</p>
+                              <p className="font-medium">{asset.asset_name}{asset.brand ? ` (${asset.brand})` : ''}</p>
                               <p className="text-xs text-muted-foreground">
                                 ID: {asset.asset_id} • Assigned: {formatDisplayDate(asset.assigned_date)}
                               </p>

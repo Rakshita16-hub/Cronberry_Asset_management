@@ -67,15 +67,17 @@ export default function AssetsPage() {
   // Get unique categories from assets
   const uniqueCategories = [...new Set(assets.map(asset => asset.category).filter(Boolean))].sort();
 
-  // Filter assets based on filter criteria
+  // Filter assets based on filter criteria (single search matches asset name or brand)
+  const searchTerm = (filters.asset_name || '').toLowerCase().trim();
   const filteredAssets = assets.filter((asset) => {
-    const matchesName = filters.asset_name === '' || 
-      asset.asset_name.toLowerCase().includes(filters.asset_name.toLowerCase());
+    const matchesSearch = searchTerm === '' ||
+      (asset.asset_name && asset.asset_name.toLowerCase().includes(searchTerm)) ||
+      (asset.brand && asset.brand.toLowerCase().includes(searchTerm));
     const matchesCategory = filters.category === '' || filters.category === 'all' || asset.category === filters.category;
     const matchesCondition = filters.condition === '' || filters.condition === 'all' || asset.condition === filters.condition;
     const matchesStatus = filters.status === '' || filters.status === 'all' || asset.status === filters.status;
-    
-    return matchesName && matchesCategory && matchesCondition && matchesStatus;
+
+    return matchesSearch && matchesCategory && matchesCondition && matchesStatus;
   });
 
   const handleFilterChange = (key, value) => {
@@ -376,7 +378,7 @@ export default function AssetsPage() {
           <div className="flex items-center gap-2 min-w-[200px] flex-1">
             <Input
               id="filter-asset-name"
-              placeholder="Search by name..."
+              placeholder="Search by asset name or brand..."
               value={filters.asset_name}
               onChange={(e) => handleFilterChange('asset_name', e.target.value)}
               className="h-9"
